@@ -1,0 +1,31 @@
+{
+	"name": "风火轮",
+	"appid": "",
+	"description": "风火轮 · 哪吒 L 车主前台",
+	"versionName": "0.1.0",
+	"versionCode": 100,
+	"vueVersion": "3",
+	"uni-app-x": {
+		"flex-direction": "column",
+		"vapor": true,
+		"styleIsolationVersion": "2",
+		"vapor-render-target": "bytecode"
+	},
+	"app": {
+		"defaultAppTheme": "light"
+	},
+	"app-android": {
+		"distribute": {
+			"modules": {},
+			"icons": {},
+			"splashScreens": {}
+		}
+	},
+	"app-ios": {
+		"distribute": {
+			"modules": {},
+			"icons": {},
+			"splashScreens": {}
+		}
+	}
+}

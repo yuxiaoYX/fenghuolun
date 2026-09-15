@@ -1,0 +1,13 @@
+# GoFrame 默认配置。密钥不要写在这里。地址可被 FENGHUOLUN_HTTP_ADDR 覆盖。
+server:
+  address: ":8088"
+  dumpRouterMap: true
+  accessLogEnabled: false
+  errorLogEnabled: true
+  maxHeaderBytes: "20KB"
+  openapiPath: ""
+  swaggerPath: ""
+
+logger:
+  level: "info"
+  stdout: true

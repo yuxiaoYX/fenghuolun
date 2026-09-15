@@ -1,0 +1,17 @@
+{
+  "name": "fenghuolun",
+  "private": true,
+  "version": "0.1.0",
+  "description": "风火轮 — 哪吒 L 车主开源工具箱",
+  "scripts": {
+    "server:test": "go test -C server ./...",
+    "server:run": "go run -C server .",
+    "owner:h5": "pwsh -File apps/owner/dev-h5.ps1",
+    "admin:dev": "pnpm --dir apps/admin dev",
+    "admin:build": "pnpm --dir apps/admin build",
+    "admin:install": "pnpm --dir apps/admin install"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

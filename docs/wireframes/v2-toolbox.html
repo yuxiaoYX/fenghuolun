@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>风火轮 · 车机工具箱方向线框 v2</title>
+<style>
+:root[data-theme=dark]{--bg:#0a1017;--pan:#101b26;--pan2:#16232f;--line:#24384a;--ink:#e8f0f6;--mut:#8ba1b5;--ele:#3ddc91;--ele2:#123527;--oil:#f5a524;--oil2:#3a2a10;--warn:#ff7a5c;--unk:#5b6c7b;--scr:rgba(0,0,0,.55)}
+:root[data-theme=light]{--bg:#e9eef3;--pan:#fff;--pan2:#f4f8fb;--line:#d5dde6;--ink:#14202c;--mut:#5a6a7a;--ele:#0c9a66;--ele2:#d9f3e8;--oil:#b96e00;--oil2:#fbedd2;--warn:#d24430;--unk:#9fabba;--scr:rgba(20,32,44,.4)}
+*{box-sizing:border-box}html,body{margin:0}
+body{min-height:100dvh;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:radial-gradient(900px 400px at 10% -5%,var(--pan2) 0,transparent 55%),var(--bg)}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1140px;margin:0 auto;padding:32px 20px 72px;display:grid;grid-template-columns:400px 1fr;gap:44px;align-items:start}
+@media(max-width:920px){.wrap{grid-template-columns:1fr;justify-items:center}.copy{max-width:400px}}
+.copy h1{font-size:30px;margin:0 0 8px;letter-spacing:-.02em}
+.copy .lead{color:var(--mut);line-height:1.7;font-size:14px;margin:0 0 14px}
+.tg{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.tg button{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--pan);color:var(--mut);font-weight:600;font-size:13px}
+.tg button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.copy h2{font-size:12px;letter-spacing:.14em;color:var(--mut);margin:24px 0 8px;font-weight:700}
+.copy ul{margin:0;padding-left:18px;color:var(--mut);line-height:1.75;font-size:13.5px}
+.copy li{margin:5px 0}
+.device{width:390px;height:844px;background:var(--bg);border-radius:38px;box-shadow:0 0 0 1px var(--line),0 0 0 12px #14181c,0 30px 60px rgba(0,0,0,.35);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.os{height:44px;padding:0 26px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;color:var(--mut)}
+.scroll{flex:1;overflow:auto;padding:6px 18px 18px}.scroll::-webkit-scrollbar{width:0}
+.view{display:none}.view.on{display:block}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0 12px}
+.hd .nm{font-size:22px;font-weight:700;margin:0;letter-spacing:-.02em}
+.hd .mt{margin:5px 0 0;font-size:11.5px;color:var(--mut);line-height:1.45}
+.ib{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--pan);display:grid;place-items:center;color:var(--ink)}
+.num{font-variant-numeric:tabular-nums;font-family:ui-monospace,Consolas,monospace}
+/* 状态条 */
+.st{display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:10px;margin-bottom:12px;background:var(--ele2);color:var(--ele);font-size:11.5px;font-weight:600}
+.st.bad{background:var(--oil2);color:var(--oil)}
+.st i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+/* 主仪表卡 */
+.gauge{background:var(--pan);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:10px}
+.gauge .q{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut)}
+.big{font-size:46px;font-weight:700;line-height:1.05;margin:6px 0 2px}
+.big small{font-size:15px;color:var(--mut);font-family:"Noto Sans SC",sans-serif;font-weight:600}
+.rail{height:10px;border-radius:99px;background:var(--pan2);border:1px solid var(--line);display:flex;overflow:hidden;margin:10px 0 6px}
+.rail .e{background:var(--ele)}.rail .f{background:var(--oil)}
+.rail-cap{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut)}
+.sub{font-size:12.5px;color:var(--mut);margin-top:6px}.sub b{color:var(--ink)}
+/* 车顶视图 */
+.car{background:var(--pan);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px}
+.car .k{font-size:11px;font-weight:700;color:var(--mut);margin-bottom:8px;display:flex;justify-content:space-between}
+.car svg{width:100%;display:block}
+.tire{fill:var(--pan2);stroke:var(--line)}
+.body{fill:none;stroke:var(--mut);stroke-width:1.6}
+.glass{stroke:var(--unk);stroke-width:1;stroke-dasharray:3 3;fill:none}
+.pt{font-size:8.5px;fill:var(--mut);font-family:ui-monospace,monospace}
+.dot-ok{fill:var(--ele)}.dot-unk{fill:var(--unk)}
+/* 指标格 */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.tile{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:12px 13px}
+.tile .k{font-size:10.5px;font-weight:700;color:var(--mut);letter-spacing:.05em}
+.tile .v{font-size:24px;font-weight:700;margin-top:3px}
+.tile .v small{font-size:11.5px;color:var(--mut);font-weight:600}
+.tile p{margin:4px 0 0;font-size:10.5px;color:var(--mut);line-height:1.45}
+.tile.oil{background:var(--oil2);border-color:transparent}.tile.oil .v{color:var(--oil)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;font-size:11.5px;font-weight:650;background:var(--ele2);color:var(--ele)}
+.chip.unk{background:transparent;border:1px dashed var(--unk);color:var(--unk)}
+.chip.q{background:var(--pan);border:1px solid var(--line);color:var(--ink)}
+.chip i{width:6px;height:6px;border-radius:50%;background:currentColor}
+details.fold{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:4px 14px 8px;margin-bottom:10px}
+details.fold summary{min-height:44px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:650;cursor:pointer;list-style:none}
+details.fold summary::-webkit-details-marker{display:none}
+details.fold summary span{color:var(--mut);font-weight:500;font-size:11.5px}
+.row{display:flex;justify-content:space-between;min-height:30px;align-items:baseline;font-size:13.5px}
+.row span{color:var(--mut)}.row b{font-weight:650}
+.dim{color:var(--unk)!important}.note{margin:6px 0 0;font-size:11px;color:var(--mut);line-height:1.5}
+/* 图表 */
+.chart{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:12px 14px 10px;margin-bottom:10px}
+.chart .k{font-size:11px;font-weight:700;color:var(--mut);margin-bottom:8px}
+.cols{display:flex;align-items:flex-end;gap:6px;height:64px}
+.cols i{flex:1;background:var(--ele2);border-radius:3px;display:block}
+.cols i.on{background:var(--ele)}.cols.oilc i{background:var(--oil2)}.cols.oilc i.on{background:var(--oil)}
+.cap{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--mut)}
+.trend{display:flex;align-items:flex-end;gap:5px;height:34px;margin-top:8px}
+.trend i{width:9px;background:var(--ele2);border-radius:2px;display:block}.trend i.last{background:var(--ele)}
+/* 日账 */
+.day{width:100%;text-align:left;border:1px solid var(--line);background:var(--pan);border-radius:14px;padding:11px 13px;margin-bottom:8px;color:var(--ink)}
+.day strong{font-size:13.5px}.day .m{font-size:11.5px;color:var(--mut);margin-top:2px}
+.day .s{font-size:12.5px;font-weight:700;margin-top:2px}
+.flag{font-size:10px;font-weight:700;color:var(--oil);border:1px solid var(--oil);padding:1px 6px;border-radius:999px;margin-left:6px}
+.void{border:1px dashed var(--line);border-radius:14px;padding:13px;font-size:11.5px;color:var(--mut);line-height:1.55;margin-bottom:10px;background:var(--pan2)}
+.void b{color:var(--ink);display:block;margin-bottom:2px;font-size:12.5px}
+.item{width:100%;text-align:left;border:1px solid var(--line);background:var(--pan);border-radius:14px;padding:12px 13px;margin-bottom:8px;color:var(--ink);font-weight:650;font-size:13.5px}
+.item small{display:block;margin-top:3px;color:var(--mut);font-weight:500;font-size:11.5px}
+.item.wait{border-style:dashed;background:var(--oil2);color:var(--oil)}
+.item .arrow{float:right;color:var(--mut);font-weight:400}
+.field{display:block;font-size:12.5px;font-weight:700;margin:8px 0 6px}
+textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:14px;padding:12px;font:12.5px/1.5 ui-monospace,Consolas,monospace;background:var(--pan);color:var(--ink);resize:none}
+.go{width:100%;min-height:46px;margin-top:14px;border:0;border-radius:13px;background:var(--ele);color:#06231a;font-weight:700;font-size:14.5px}
+/* 底栏 */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);padding:6px 6px 14px;background:var(--pan)}
+.tabs button{min-height:52px;border:0;background:transparent;color:var(--mut);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:650}
+.tabs button[aria-current=page]{color:var(--ele)}
+.tabs svg{width:22px;height:22px}
+.device.bind-mode .tabs{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="device" id="device">
+<div class="os"><span>9:41</span><span>风火轮 · 工具箱</span></div>
+<div class="scroll">
+
+<section class="view on" data-view="now">
+  <div class="hd"><div><p class="nm">家里的 L</p><p class="mt">哪吒 L · EP32</p></div>
+  <button class="ib" aria-label="同步"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 0 1 14.2-5M20 12a8 8 0 0 1-14.2 5" stroke-linecap="round"/><path d="M18 4v5h-5M6 20v-5h5" stroke-linecap="round"/></svg></button></div>
+  <div class="st" id="fresh"><i></i>车于 3 分钟前上报 · 同步成功</div>
+  <div class="gauge">
+    <div class="q">出门够不够</div>
+    <div class="big num">127<small> km 纯电</small></div>
+    <div class="rail"><i class="e" style="width:37%"></i><i class="f" style="width:20%"></i></div>
+    <div class="rail-cap"><span>电 127</span><span>油 214</span><span>综合 341 km</span></div>
+    <div class="sub">电量 <b class="num">50%</b> · 相对上次 <b class="num">−4%</b> / <b class="num">−18 km</b></div>
+  </div>
+  <div class="car">
+    <div class="k"><span>车身巡检 · 俯视</span><span class="num">odo 8,214 km</span></div>
+    <svg viewBox="0 0 320 180">
+      <rect class="tire" x="34" y="18" width="34" height="13" rx="4"/><rect class="tire" x="252" y="18" width="34" height="13" rx="4"/>
+      <rect class="tire" x="34" y="149" width="34" height="13" rx="4"/><rect class="tire" x="252" y="149" width="34" height="13" rx="4"/>
+      <rect class="body" x="52" y="8" width="216" height="164" rx="34"/>
+      <path class="glass" d="M88 34h144M92 146h136"/>
+      <circle class="dot-ok" cx="60" cy="90" r="4"/><circle class="dot-unk" cx="260" cy="90" r="4"/>
+      <text class="pt" x="34" y="12" text-anchor="middle">2.4bar</text><text class="pt" x="269" y="12" text-anchor="middle">2.4bar</text>
+      <text class="pt" x="34" y="178" text-anchor="middle">—</text><text class="pt" x="269" y="178" text-anchor="middle">—</text>
+      <text class="pt" x="160" y="60" text-anchor="middle">门窗 —</text>
+      <text class="pt" x="160" y="120" text-anchor="middle">车内 24℃ · 车外 18℃</text>
+    </svg>
+    <p class="note">绿点=已确认关闭；空心=未验证（保持 —）。胎压直接标在四角，一眼对照。</p>
+  </div>
+  <div class="grid2">
+    <div class="tile"><div class="k">12V 电瓶</div><div class="v num">12.7<small> V</small></div><p>低于 12.2 V 会变红置顶</p></div>
+    <div class="tile oil"><div class="k">增程 · 油量</div><div class="v num">24<small> %</small></div><p>未发电 · 发电状态未对照</p></div>
+  </div>
+  <div class="chips">
+    <span class="chip"><i></i>已锁</span>
+    <span class="chip unk"><i></i>充电未知</span>
+    <span class="chip q"><i></i>位置已记录</span>
+  </div>
+  <details class="fold" open>
+    <summary>更多原始读数 <span>不编数，未知保持 —</span></summary>
+    <div class="row"><span>四门 / 前舱 / 尾门</span><b class="dim num">—</b></div>
+    <div class="row"><span>车窗 / 天窗</span><b class="dim num">—</b></div>
+    <div class="row"><span>位置（经纬度）</span><b class="num">31.23, 121.47</b></div>
+  </details>
+</section>
+
+<section class="view" data-view="energy">
+  <div class="hd"><div><p class="nm">能耗账</p><p class="mt">增程车：电和油分开记，不合成综合数</p></div></div>
+  <div class="grid2">
+    <div class="tile"><div class="k">本周用电 · 官方</div><div class="v num">12.3<small> kWh</small></div><p>比上周少 2.1 · 空调占 16%</p></div>
+    <div class="tile oil"><div class="k">本周用油 · 差分</div><div class="v num">−3<small> %</small></div><p>24%→21% · 加油已剔除</p></div>
+  </div>
+  <div class="chart"><div class="k">近 7 日用电 kWh</div>
+    <div class="cols"><i style="height:40%"></i><i style="height:22%"></i><i style="height:70%"></i><i style="height:35%"></i><i style="height:10%"></i><i style="height:55%"></i><i class="on" style="height:88%"></i></div>
+    <div class="cap"><span>周一</span><span>周日</span></div></div>
+  <div class="chart"><div class="k">近 7 日耗油（油量差分）</div>
+    <div class="cols oilc"><i style="height:30%"></i><i style="height:8%"></i><i class="on" style="height:55%"></i><i style="height:12%"></i><i style="height:2%"></i><i style="height:18%"></i><i style="height:22%"></i></div>
+    <div class="cap"><span>加油日另标</span><span>空日为 0 高</span></div></div>
+  <button class="day"><strong>9月2日<span class="flag">增程开过</span></strong><div class="s num">电 12.3 kWh · 油 −3%</div><div class="m">行驶 8.1 · 空调 2.0 · 回收 1.1</div></button>
+  <button class="day"><strong>9月5日<span class="flag">加油</span></strong><div class="s num">油 +18%</div><div class="m">21%→39% · 不计入耗油</div></button>
+</section>
+
+<section class="view" data-view="battery">
+  <div class="hd"><div><p class="nm">电池账</p><p class="mt">先盯 12V 和同电量电压，不拿假 SOH 撑场面</p></div></div>
+  <div class="st"><i></i>近 7 次同步 · 12.5–12.8 V</div>
+  <div class="gauge">
+    <div class="q">12V · 最容易被忽略</div>
+    <div class="big num">12.7<small> V</small></div>
+    <div class="trend"><i style="height:70%"></i><i style="height:74%"></i><i style="height:68%"></i><i style="height:80%"></i><i style="height:76%"></i><i style="height:72%"></i><i class="last" style="height:78%"></i></div>
+  </div>
+  <div class="tile"><div class="k">动力电池 · 同电量对照</div><div class="v num">354.5<small> V @ 50%</small></div><p>每次相近电量记一笔，电压下探才是可见老化。电流 — A（未对照）</p></div>
+  <div class="void"><b>SOH 先空着</b>官方车况无已验证健康度，绝不填 0 或 100。</div>
+</section>
+
+<section class="view" data-view="more">
+  <div class="hd"><div><p class="nm">工具箱</p><p class="mt">已绑定 · VIN ****0001 · 上次同步 2 分钟前</p></div></div>
+  <button class="item">绑定 / 更换 refresh_token<small>从官方哪吒 App 取得，整段粘贴</small><span class="arrow">›</span></button>
+  <button class="item">立即同步一次<small>走本服务换票拉快照，不直连官方云</small><span class="arrow">›</span></button>
+  <button class="item">导出快照 JSON<small>历史留在自己手里，官方云停了还能翻</small><span class="arrow">›</span></button>
+  <button class="item">电价 / 油价 / 油箱容积<small>对照后才能把 kWh、油量% 换算成钱和升</small><span class="arrow">›</span></button>
+  <button class="item wait">远程解锁 / 空调 / 充电 · 尚未开通<small>只读工具箱，不下发车控命令</small></button>
+  <button class="item">关于与免责<small>非官方 · 无 OTA · 依赖官方云做实时</small><span class="arrow">›</span></button>
+</section>
+
+<section class="view" data-view="bind">
+  <div class="hd"><div><p class="nm">开始记账</p><p class="mt">把 refresh_token 交给本服务，手机不保存官方令牌</p></div></div>
+  <label class="field" for="rt">refresh_token</label>
+  <textarea id="rt" placeholder="从官方哪吒 App 取得，整段粘贴"></textarea>
+  <p class="note">不用填网关和签名。本服务换票。不能刷车机 OTA。</p>
+  <button class="go" id="bindGo">绑定并拉第一次快照</button>
+</section>
+
+</div>
+<nav class="tabs">
+  <button data-go="now" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 5l8 6.5V20H4v-8.5Z"/><path d="M9 20v-6h6v6"/></svg>车况</button>
+  <button data-go="energy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" stroke-linejoin="round"/></svg>能耗</button>
+  <button data-go="battery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="7" width="12" height="14" rx="2"/><path d="M10 7V4h4v3"/></svg>电池</button>
+  <button data-go="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 21l-3-.5-.5-3-3-.5.2-6.7Z"/><path d="M3 3l7.6 7.6"/></svg>工具箱</button>
+</nav>
+</div>
+
+<aside class="copy">
+<h1>车机工具箱 · 方向稿 v2</h1>
+<p class="lead">从「纸色账本」转向「车载诊断仪」：深色仪表基调 + 等宽数字 + 车身俯视巡检图。「更多」改为「工具箱」，强化定位。所有展示纪律（未知为 —、不编状态）不变。</p>
+<div class="tg">
+  <button id="thBtn" aria-pressed="true">深色</button>
+  <button id="lightBtn" aria-pressed="false">浅色</button>
+  <button id="bindBtn" aria-pressed="false">绑定页</button>
+  <button id="staleBtn" aria-pressed="false">上报过期</button>
+</div>
+<h2>相对现版的关键变化</h2>
+<ul>
+  <li><b>车顶俯视巡检图</b>：锁/门窗/胎压/温度放进车形示意图，一眼建立「车」的心智，替代纯文字行。</li>
+  <li><b>续航双轨条</b>：电/油续航画成同一条能量轨，主数字仍是「够不够出门」。</li>
+  <li><b>等宽数字 + 仪表配色</b>：深色为车载默认（夜间/车机），浅色供白天户外。</li>
+  <li><b>「更多」→「工具箱」</b>：绑定、同步、导出、单价、远程占位归拢进工具箱语义。</li>
+  <li>信息架构其余不动：车况 / 能耗 / 电池 三页心智已验证。</li>
+</ul>
+<h2>下一步</h2>
+<ul><li>确认方向后出高保真（含 token 表、uni.scss 映射、浅色对比度校验）。不改任何前台代码。</li></ul>
+</aside>
+</div>
+<script>
+const device=document.getElementById("device"),root=document.documentElement;
+const go=n=>{device.classList.toggle("bind-mode",n==="bind");document.querySelectorAll(".view").forEach(e=>e.classList.toggle("on",e.dataset.view===n));document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===n?"page":"false"));document.getElementById("bindBtn").setAttribute("aria-pressed",String(n==="bind"))};
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
+document.getElementById("bindBtn").addEventListener("click",e=>go(e.currentTarget.getAttribute("aria-pressed")!=="true"?"bind":"now"));
+const th=(dark)=>{root.dataset.theme=dark?"dark":"light";document.getElementById("thBtn").setAttribute("aria-pressed",String(dark));document.getElementById("lightBtn").setAttribute("aria-pressed",String(!dark))};
+document.getElementById("thBtn").addEventListener("click",()=>th(true));
+document.getElementById("lightBtn").addEventListener("click",()=>th(false));
+document.getElementById("staleBtn").addEventListener("click",e=>{const on=e.currentTarget.getAttribute("aria-pressed")!=="true";e.currentTarget.setAttribute("aria-pressed",String(on));const f=document.getElementById("fresh");f.classList.toggle("bad",on);f.innerHTML=on?'<i></i>同步成功 · 车上报已过 14 小时，数字不是现在':'<i></i>车于 3 分钟前上报 · 同步成功'});
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+{
+  "pages": [
+    {
+      "path": "pages/now/now",
+      "style": {
+        "navigationBarTitleText": "车况"
+      }
+    },
+    {
+      "path": "pages/ctrl/ctrl",
+      "style": {
+        "navigationBarTitleText": "车控"
+      }
+    },
+    {
+      "path": "pages/energy/energy",
+      "style": {
+        "navigationBarTitleText": "能耗"
+      }
+    },
+    {
+      "path": "pages/battery/battery",
+      "style": {
+        "navigationBarTitleText": "电池"
+      }
+    },
+    {
+      "path": "pages/more/more",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/bind/bind",
+      "style": {
+        "navigationBarTitleText": "绑定"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "风火轮",
+    "navigationBarBackgroundColor": "#EEF2F6",
+    "backgroundColor": "@bgColor",
+    "backgroundColorContent": "@bgColorContent"
+  },
+  "tabBar": {
+    "color": "#93A5B5",
+    "selectedColor": "#087E55",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "height": 56,
+    "iconWidth": 24,
+    "list": [
+      {
+        "pagePath": "pages/now/now",
+        "text": "车况",
+        "iconPath": "static/tab/now.png",
+        "selectedIconPath": "static/tab/now-active.png"
+      },
+      {
+        "pagePath": "pages/ctrl/ctrl",
+        "text": "车控",
+        "iconPath": "static/tab/ctrl.png",
+        "selectedIconPath": "static/tab/ctrl-active.png"
+      },
+      {
+        "pagePath": "pages/energy/energy",
+        "text": "能耗",
+        "iconPath": "static/tab/energy.png",
+        "selectedIconPath": "static/tab/energy-active.png"
+      },
+      {
+        "pagePath": "pages/battery/battery",
+        "text": "电池",
+        "iconPath": "static/tab/battery.png",
+        "selectedIconPath": "static/tab/battery-active.png"
+      },
+      {
+        "pagePath": "pages/more/more",
+        "text": "我的",
+        "iconPath": "static/tab/more.png",
+        "selectedIconPath": "static/tab/more-active.png"
+      }
+    ]
+  }
+}

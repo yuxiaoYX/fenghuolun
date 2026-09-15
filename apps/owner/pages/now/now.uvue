@@ -1,0 +1,423 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, sessionOf, dashInt, dashFixed1, dashFixed2, dashUnknown, dashCoord, barWidthPct, snapshotFreshLine, snapshotStale, bounceIfAuthFailed, pingHealth, envelopeOk, envelopeData, relativeUpdateLine, chargeStatusText, pluggedNote, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const lockIcon = ref(navIcon('lock'))
+	const syncIcon = ref(navIcon('sync'))
+	const name = ref('账本')
+	const meta = ref('尚未绑定')
+	const freshShort = ref('尚未更新')
+	const exactFresh = ref('还没有快照')
+	const stale = ref(false)
+	const extraOpen = ref(false)
+	const evKm = ref('—')
+	const soc = ref('—')
+	const socBar = ref('0%')
+	const totalKm = ref('—')
+	const fuelKm = ref('—')
+	const fuelPct = ref('—')
+	const fuelBar = ref('0%')
+	const v12 = ref('—')
+	const hasExtender = ref(false)
+	const odoKm = ref('—')
+	const cabinC = ref('—')
+	const outsideC = ref('—')
+	const chargeTxt = ref('—')
+	const chargeNoteTxt = ref('插枪状态未知')
+	const chargeOn = ref(false)
+	const gearTxt = ref('—')
+	const doorTxt = ref('车门状态未知')
+	const doorAlert = ref(false)
+	const tailTxt = ref('后备箱状态未知')
+	const tailAlert = ref(false)
+	const windowsTxt = ref('暂无数据')
+	const warn = ref('')
+	const hasLoc = ref(false)
+	const locTxt = ref('—')
+	const tireFLBar = ref('—')
+	const tireFLTemp = ref('—')
+	const tireFLMiss = ref(true)
+	const tireFRBar = ref('—')
+	const tireFRTemp = ref('—')
+	const tireFRMiss = ref(true)
+	const tireRLBar = ref('—')
+	const tireRLTemp = ref('—')
+	const tireRLMiss = ref(true)
+	const tireRRBar = ref('—')
+	const tireRRTemp = ref('—')
+	const tireRRMiss = ref(true)
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		const v = obj[key]
+		if (v == null) {
+			return null
+		}
+		return v
+	}
+
+	const fillTire = (corner, setBar, setTemp, setMiss) => {
+		if (corner == null) {
+			setBar('—')
+			setTemp('暂无数据')
+			setMiss(true)
+			return
+		}
+		const bar = dashFixed2(pick(corner, 'bar'), '')
+		const tempN = pick(corner, 'tempC')
+		const temp = tempN == null ? '—' : dashInt(tempN, '°C')
+		const miss = bar == '—' && temp == '—'
+		setBar(bar)
+		if (miss == true) {
+			setTemp('暂无数据')
+		} else {
+			setTemp(temp)
+		}
+		setMiss(miss)
+	}
+
+	const closedOf = (v) => {
+		return dashUnknown(v) == 'closed'
+	}
+
+	const doorSummary = (fl, fr, rl, rr) => {
+		const allClosed = closedOf(fl) == true && closedOf(fr) == true && closedOf(rl) == true && closedOf(rr) == true
+		if (allClosed == true) {
+			return '车门已关闭'
+		}
+		return '车门状态未知'
+	}
+
+	const load = async () => {
+		if (sessionOf() == '') {
+			const up = await pingHealth()
+			if (up == true) {
+				meta.value = '后端已通 · 去「我的」填写 refresh_token'
+			} else {
+				meta.value = '后端未通 · 先启动服务再打开「我的」绑定'
+			}
+			return
+		}
+		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
+		if (envelopeOk(res) == false) {
+			if (bounceIfAuthFailed(res) == true) {
+				return
+			}
+			meta.value = '本服务无响应或会话失效'
+			return
+		}
+		const d = envelopeData(res)
+		const nick = pick(d, 'nickname')
+		name.value = nick != null && nick != '' ? '' + nick : '家里的 L'
+		const modelName = pick(d, 'modelName')
+		const trim = pick(d, 'trim')
+		if (trim != null && trim != '') {
+			meta.value = '' + modelName + ' · ' + trim
+		} else {
+			meta.value = '' + modelName + ' · ' + pick(d, 'modelCode')
+		}
+		const power = pick(d, 'power')
+		evKm.value = dashInt(pick(power, 'evRangeKm'), '')
+		const socN = pick(power, 'socPct')
+		soc.value = dashInt(socN, '%')
+		socBar.value = barWidthPct(socN)
+		totalKm.value = dashInt(pick(power, 'totalRangeKm'), '')
+		fuelKm.value = dashInt(pick(power, 'fuelRangeKm'), '')
+		const b12 = pick(d, 'battery12v')
+		v12.value = dashFixed1(pick(b12, 'volts'), ' V')
+		const ext = pick(d, 'extender')
+		hasExtender.value = ext != null
+		let fuelN = pick(ext, 'fuelPct')
+		if (fuelN == null) {
+			fuelN = pick(power, 'fuelPct')
+		}
+		fuelPct.value = dashInt(fuelN, '%')
+		fuelBar.value = barWidthPct(fuelN)
+		if (pick(ext, 'fuelRangeKm') != null) {
+			fuelKm.value = dashInt(pick(ext, 'fuelRangeKm'), '')
+		}
+		const body = pick(d, 'body')
+		const doors = pick(body, 'doors')
+		doorTxt.value = doorSummary(pick(doors, 'fl'), pick(doors, 'fr'), pick(doors, 'rl'), pick(doors, 'rr'))
+		doorAlert.value = false
+		const trunk = dashUnknown(pick(doors, 'trunk'))
+		if (trunk == 'closed') {
+			tailTxt.value = '后备箱已关闭'
+			tailAlert.value = false
+		} else {
+			tailTxt.value = '后备箱状态未知'
+			tailAlert.value = false
+		}
+		const wins = pick(body, 'windows')
+		const winAll = closedOf(pick(wins, 'fl')) == true && closedOf(pick(wins, 'fr')) == true && closedOf(pick(wins, 'rl')) == true && closedOf(pick(wins, 'rr')) == true && closedOf(pick(wins, 'sunroof')) == true
+		if (winAll == true) {
+			windowsTxt.value = '关'
+		} else {
+			windowsTxt.value = '暂无数据'
+		}
+		const chargeRaw = dashUnknown(pick(power, 'chargeStatus'))
+		chargeTxt.value = chargeStatusText(chargeRaw)
+		chargeOn.value = chargeRaw == 'charging'
+		const plugged = pick(power, 'pluggedIn')
+		if (plugged == true) {
+			chargeNoteTxt.value = pluggedNote(true)
+		} else if (plugged == false) {
+			chargeNoteTxt.value = pluggedNote(false)
+		} else {
+			chargeNoteTxt.value = pluggedNote(null)
+		}
+		gearTxt.value = '—'
+		odoKm.value = dashInt(pick(d, 'odometerKm'), '')
+		const climate = pick(d, 'climate')
+		cabinC.value = dashFixed1(pick(climate, 'cabinC'), '°C')
+		outsideC.value = dashFixed1(pick(climate, 'outsideC'), '°C')
+		const tires = pick(d, 'tires')
+		fillTire(pick(tires, 'fl'), (v) => { tireFLBar.value = v }, (v) => { tireFLTemp.value = v }, (v) => { tireFLMiss.value = v })
+		fillTire(pick(tires, 'fr'), (v) => { tireFRBar.value = v }, (v) => { tireFRTemp.value = v }, (v) => { tireFRMiss.value = v })
+		fillTire(pick(tires, 'rl'), (v) => { tireRLBar.value = v }, (v) => { tireRLTemp.value = v }, (v) => { tireRLMiss.value = v })
+		fillTire(pick(tires, 'rr'), (v) => { tireRRBar.value = v }, (v) => { tireRRTemp.value = v }, (v) => { tireRRMiss.value = v })
+		const loc = pick(d, 'location')
+		const lng = pick(loc, 'lng')
+		const lat = pick(loc, 'lat')
+		if (lng != null && lat != null) {
+			hasLoc.value = true
+			locTxt.value = dashCoord(lat) + ', ' + dashCoord(lng)
+		} else {
+			hasLoc.value = false
+			locTxt.value = '—'
+		}
+		stale.value = snapshotStale(d)
+		exactFresh.value = snapshotFreshLine(d)
+		const reported = pick(d, 'reportedAt')
+		const fetched = pick(d, 'fetchedAt')
+		const at = reported != null && reported != '' ? '' + reported : (fetched != null ? '' + fetched : null)
+		freshShort.value = relativeUpdateLine(at, stale.value)
+		const warnings = pick(d, 'decodeWarnings')
+		if (warnings != null && warnings.length > 0) {
+			warn.value = '部分单位尚未对照实车，已标候选或隐藏。'
+		} else {
+			warn.value = ''
+		}
+	}
+
+	const tapSync = async () => {
+		if (sessionOf() == '') {
+			uni.navigateTo({ url: '/pages/bind/bind' })
+			return
+		}
+		uni.showToast({ title: '正在同步…', icon: 'none' })
+		const syncRes = await ownerRequest('POST', '/api/v1/owner/sync', null)
+		if (bounceIfAuthFailed(syncRes) == true) {
+			return
+		}
+		await load()
+		if (envelopeOk(syncRes) == true) {
+			uni.showToast({ title: '同步成功', icon: 'none' })
+		}
+	}
+
+	const toggleExtra = () => {
+		extraOpen.value = extraOpen.value == false
+	}
+
+	const applyChrome = () => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(true)
+		wrapStyle.value = pageWrapStyle()
+		lockIcon.value = navIcon('lock')
+		syncIcon.value = navIcon('sync')
+		applyThemeChrome()
+	}
+
+	onLoad(() => {
+		applyChrome()
+	})
+
+	onShow(() => {
+		applyChrome()
+		load()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="home-header">
+				<view class="head-main">
+					<text class="name">{{ name }}</text>
+					<view class="home-subline">
+						<text class="home-model">{{ meta }}</text>
+						<view class="home-fresh">
+							<view class="fresh-dot" :class="stale == true ? 'fresh-dot-bad' : ''"></view>
+							<text class="home-fresh-txt" :class="stale == true ? 'home-fresh-bad-txt' : ''">{{ freshShort }}</text>
+						</view>
+					</view>
+				</view>
+				<view class="icon-btn" @click="tapSync">
+					<image class="icon-img" :src="syncIcon" mode="aspectFit"></image>
+				</view>
+			</view>
+			<text class="note" v-if="warn.length > 0">{{ warn }}</text>
+
+			<view class="overview">
+				<view class="stage-heading">
+					<text class="stage-h">车辆状态</text>
+					<view class="gear-row">
+						<text class="gear-b">{{ gearTxt }}</text>
+						<text class="gear-s">挡位未对照</text>
+					</view>
+				</view>
+				<view class="vehicle-map">
+					<view class="tire-col">
+						<view>
+							<text class="tire-label">左前</text>
+							<text class="tire-value">{{ tireFLBar }}</text>
+							<text class="tire-unit">bar</text>
+							<text class="tire-temp">{{ tireFLTemp }}</text>
+						</view>
+						<view>
+							<text class="tire-label">左后</text>
+							<text class="tire-value">{{ tireRLBar }}</text>
+							<text class="tire-unit">bar</text>
+							<text class="tire-temp">{{ tireRLTemp }}</text>
+						</view>
+					</view>
+					<view class="car-slot">
+						<image class="car-img" src="/static/vehicle/neta-l.png" mode="aspectFit"></image>
+					</view>
+					<view class="tire-col tire-col-r">
+						<view>
+							<text class="tire-label">右前</text>
+							<text class="tire-value">{{ tireFRBar }}</text>
+							<text class="tire-unit">bar</text>
+							<text class="tire-temp">{{ tireFRTemp }}</text>
+						</view>
+						<view>
+							<text class="tire-label">右后</text>
+							<text class="tire-value">{{ tireRRBar }}</text>
+							<text class="tire-unit">bar</text>
+							<text class="tire-temp">{{ tireRRTemp }}</text>
+						</view>
+					</view>
+				</view>
+				<view class="door-state">
+					<view class="door-cell">
+						<view class="status-dot" :class="doorAlert == true ? 'status-dot-bad' : ''"></view>
+						<text class="door-txt" :class="doorAlert == true ? 'door-txt-bad' : ''">{{ doorTxt }}</text>
+					</view>
+					<view class="door-cell door-cell-r">
+						<view class="status-dot" :class="tailAlert == true ? 'status-dot-bad' : ''"></view>
+						<text class="door-txt" :class="tailAlert == true ? 'door-txt-bad' : ''">{{ tailTxt }}</text>
+					</view>
+				</view>
+				<view class="range-summary">
+					<view class="range-columns">
+						<view class="range-part">
+							<text class="range-label">纯电续航</text>
+							<view class="range-value-row">
+								<text class="range-value">{{ evKm }}</text>
+								<text class="unit"> km</text>
+							</view>
+							<view class="energy-level">
+								<text class="energy-k">电量</text>
+								<text class="energy-v">{{ soc }}</text>
+							</view>
+							<view class="level-track">
+								<view class="level-fill" :style="'width:' + socBar"></view>
+							</view>
+						</view>
+						<view class="range-part range-part-r">
+							<text class="range-label">燃油续航</text>
+							<view class="range-value-row">
+								<text class="range-value">{{ fuelKm }}</text>
+								<text class="unit"> km</text>
+							</view>
+							<view class="energy-level">
+								<text class="energy-k energy-k-oil">油量</text>
+								<text class="energy-v energy-v-oil">{{ fuelPct }}</text>
+							</view>
+							<view class="level-track">
+								<view class="level-fill level-fill-oil" :style="'width:' + fuelBar"></view>
+							</view>
+						</view>
+					</view>
+					<view class="range-meta">
+						<view class="gear-row">
+							<text class="range-meta-txt">综合 </text>
+							<text class="range-meta-em">{{ totalKm }}</text>
+							<text class="range-meta-txt"> km</text>
+						</view>
+						<view class="gear-row">
+							<text class="range-meta-txt">总里程 </text>
+							<text class="range-meta-em">{{ odoKm }}</text>
+							<text class="range-meta-txt"> km</text>
+						</view>
+					</view>
+				</view>
+				<view class="stage-temps">
+					<view class="temp-cell">
+						<text class="temp-k">车内</text>
+						<text class="temp-v">{{ cabinC }}</text>
+					</view>
+					<view class="temp-cell temp-cell-r">
+						<text class="temp-k">车外</text>
+						<text class="temp-v">{{ outsideC }}</text>
+					</view>
+				</view>
+				<view class="stage-charge">
+					<text class="charge-k">充电状态</text>
+					<view class="charge-r">
+						<text class="charge-v" :class="chargeOn == true ? 'charge-v-on' : ''">{{ chargeTxt }}</text>
+						<text class="charge-note">{{ chargeNoteTxt }}</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="quickrow">
+				<view class="slide" @click="notOpen">
+					<text class="slide-lab">向右滑动解锁 ›</text>
+					<view class="slide-thumb">
+						<text class="slide-thumb-txt">»» 解锁</text>
+					</view>
+				</view>
+				<view class="lockbtn" @click="notOpen">
+					<image class="lock-img" :src="lockIcon" mode="aspectFit"></image>
+					<text class="lock-txt">锁车</text>
+				</view>
+			</view>
+			<text class="quick-note">解锁后 30 秒内未开门，将自动回锁 · 车控尚未开通</text>
+
+			<button class="fold-btn" @click="toggleExtra">{{ extraOpen == true ? '收起更多读数' : '更多读数' }}</button>
+			<view class="card" v-if="extraOpen == true">
+				<view class="line">
+					<text class="line-k">同步 / 上报</text>
+					<text class="line-v">{{ exactFresh }}</text>
+				</view>
+				<view class="line">
+					<text class="line-k">12V 电瓶</text>
+					<text class="line-v">{{ v12 }}</text>
+				</view>
+				<view class="line">
+					<text class="line-k">车窗 / 天窗</text>
+					<text class="line-v" :class="windowsTxt == '暂无数据' ? 'dim' : ''">{{ windowsTxt }}</text>
+				</view>
+				<view class="line" v-if="hasLoc == true">
+					<text class="line-k">位置</text>
+					<text class="line-v">{{ locTxt }}</text>
+				</view>
+			</view>
+			<view class="remote-ph" @click="notOpen">
+				<text class="remote-k">远程启动</text>
+				<text class="remote-v">暂未开放</text>
+			</view>
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>

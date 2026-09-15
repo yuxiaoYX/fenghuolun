@@ -1,0 +1,68 @@
+{
+  "code": 20000,
+  "description": "success",
+  "data": {
+    "vehicleBasic": {
+      "soc": 50,
+      "mileage": 12345,
+      "totalVoltage": 3545,
+      "totalCurrent": 10000,
+      "chargeStatus": 3
+    },
+    "enduranceStatus": {
+      "powerPercentage": 5000,
+      "powerResidueMileage": 1270,
+      "fuelMileageRemaining": 2140,
+      "estimateFuelPercent": 24
+    },
+    "vehicleExtend": {
+      "battery12Voltage": 127
+    },
+    "vehicleConnection": {
+      "reportTime": 1767225600000
+    },
+    "chargingStatus": {
+      "powerChargeStatus": 0
+    },
+    "lockStatus": {
+      "driverSizeDoorLockStatus": 0,
+      "coDriverSizeDoorLockStatus": 0,
+      "leftAfterDoorLockStatus": 0,
+      "rightAfterDoorLockStatus": 0
+    },
+    "doorCoverStatus": {
+      "driverSizeDoorStatus": 0,
+      "coDriverSizeDoorStatus": 0,
+      "leftAfterDoorStatus": 0,
+      "rightAfterDoorStatus": 0,
+      "coverFrontStatus": 0,
+      "carBoarStatus": 0
+    },
+    "windowStatus": {
+      "driverSizeWinStatus": 16,
+      "coDriverSizeWinStatus": 16,
+      "leftAfterWinStatus": 16,
+      "rightAfterWinLockStatus": 16,
+      "skyWindowStatus": 0
+    },
+    "tyreStatus": {
+      "tireLeftFrontPress": 135,
+      "tireLeftFrontTemp": 73,
+      "tireRightFrontPress": 136,
+      "tireRightFrontTemp": 72,
+      "tireLeftAfterPress": 133,
+      "tireLeftAfterTemp": 72,
+      "tireRightAfterPress": 138,
+      "tireRightAfterTemp": 73
+    },
+    "airconditionStatus": {
+      "airInTemp": 156,
+      "airOutTemp": 159
+    },
+    "lampStatus": {},
+    "seatStatus": {},
+    "energyConsumption": {
+      "todayEnergyConsumption": 65535
+    }
+  }
+}

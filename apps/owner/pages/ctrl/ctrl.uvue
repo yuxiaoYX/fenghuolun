@@ -1,0 +1,108 @@
+<script setup>
+	import { ref } from 'vue'
+	import { notOpen, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+
+	const applyChrome = () => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(true)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	}
+
+	onLoad(() => {
+		applyChrome()
+	})
+
+	onShow(() => {
+		applyChrome()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="vstate">
+				<view class="vstate-dot"></view>
+				<text class="vstate-b">尚未开通</text>
+				<text class="vstate-s">无命令闭环前不向实车下发</text>
+			</view>
+
+			<text class="sec-title">温控</text>
+			<view class="ctrl-row">
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">空调</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">除霜</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">座椅加热</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+			</view>
+
+			<text class="sec-title">门窗与充电</text>
+			<view class="ctrl-row">
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">车窗</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">天窗通风</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">充电</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+			</view>
+			<view class="ctrl-row">
+				<view class="ctrl-btn" @click="notOpen">
+					<text class="ctrl-name">充电口</text>
+					<text class="ctrl-sub">尚未开通</text>
+				</view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" style="opacity: 0;"></view>
+				<view class="ctrl-gap"></view>
+				<view class="ctrl-btn" style="opacity: 0;"></view>
+			</view>
+
+			<text class="sec-title">危险操作 · 滑动执行</text>
+			<view class="quickrow">
+				<view class="slide" @click="notOpen">
+					<text class="slide-lab">滑动解锁车门</text>
+					<view class="slide-thumb">
+						<text class="slide-thumb-txt">»» 解锁</text>
+					</view>
+				</view>
+			</view>
+			<view class="quickrow">
+				<view class="slide" @click="notOpen">
+					<text class="slide-lab">滑动打开尾门</text>
+					<view class="slide-thumb">
+						<text class="slide-thumb-txt">»» 尾门</text>
+					</view>
+				</view>
+			</view>
+
+			<text class="sec-title">最近操作</text>
+			<view class="void">
+				<text class="void-t">暂无留痕</text>
+				<text class="note">车控未开通，不会下发指令，也不会记假记录。</text>
+			</view>
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>

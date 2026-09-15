@@ -1,0 +1,69 @@
+<script setup>
+	import { ref } from 'vue'
+	import { API_BASE } from '../../common/config.uts'
+	import { ownerRequest, saveSession, envelopeOk, envelopeData, envelopeErrorCode, pingHealth, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const token = ref('')
+	const err = ref('')
+	const busy = ref(false)
+
+	const submit = async () => {
+		err.value = ''
+		busy.value = true
+		const res = await ownerRequest('POST', '/api/v1/owner/bind', {
+			refresh_token: token.value
+		})
+		busy.value = false
+		if (res == null) {
+			const up = await pingHealth()
+			if (up == true) {
+				err.value = '绑定未完成。换票要连官方云，请稍后再试。'
+			} else {
+				err.value = '连不上账本服务 ' + API_BASE + '。确认 Go 已启动：go run -C server .'
+			}
+			return
+		}
+		if (envelopeOk(res) == true) {
+			const d = envelopeData(res)
+			if (d != null && d['session'] != null) {
+				saveSession('' + d['session'])
+				uni.switchTab({
+					url: '/pages/now/now'
+				})
+				return
+			}
+		}
+		const code = envelopeErrorCode(res)
+		if (code == 'token_invalid' || code == 'invalid_request') {
+			err.value = '请重新填写 refresh_token'
+			return
+		}
+		err.value = '绑定失败'
+	}
+
+	onLoad(() => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<text class="meta">把 refresh_token 交给本服务。成功后本服务换票并拉车况，手机不保存官方令牌。</text>
+			<text class="field">refresh_token</text>
+			<textarea class="input" style="width:100%" v-model="token" placeholder="从官方哪吒 App 取得，整段粘贴"></textarea>
+			<text class="note">不用填网关和签名。不能刷车机 OTA。</text>
+			<button class="primary" :disabled="busy == true" @click="submit">绑定并拉第一次快照</button>
+			<text class="err" v-if="err.length > 0">{{ err }}</text>
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>

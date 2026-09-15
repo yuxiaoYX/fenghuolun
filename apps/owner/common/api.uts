@@ -1,0 +1,440 @@
+import { API_BASE } from './config.uts'
+
+export function sessionOf() : string {
+	const raw = uni.getStorageSync('fhl_session')
+	if (raw == null) {
+		return ''
+	}
+	return '' + raw
+}
+
+export function saveSession(token : string) {
+	uni.setStorageSync('fhl_session', token)
+}
+
+export function clearSession() {
+	uni.removeStorageSync('fhl_session')
+}
+
+export function envelopeOk(res : UTSJSONObject | null) : boolean {
+	if (res == null) {
+		return false
+	}
+	return res['ok'] == true
+}
+
+export function envelopeData(res : UTSJSONObject | null) : UTSJSONObject | null {
+	if (res == null) {
+		return null
+	}
+	const d = res['data']
+	if (d == null) {
+		return null
+	}
+	return d as UTSJSONObject
+}
+
+export function envelopeErrorCode(res : UTSJSONObject | null) : string {
+	if (res == null) {
+		return ''
+	}
+	const errObj = res['error']
+	if (errObj == null) {
+		return ''
+	}
+	const e = errObj as UTSJSONObject
+	const code = e['code']
+	if (code == null) {
+		return ''
+	}
+	return '' + code
+}
+
+export function bounceIfAuthFailed(res : UTSJSONObject | null) : boolean {
+	const code = envelopeErrorCode(res)
+	if (code == 'token_invalid' || code == 'unauthorized') {
+		clearSession()
+		uni.navigateTo({
+			url: '/pages/bind/bind'
+		})
+		return true
+	}
+	return false
+}
+
+export function dashNum(v : number | null, suffix : string) : string {
+	if (v == null) {
+		return '—'
+	}
+	return v.toString() + suffix
+}
+
+export function dashInt(v : number | null, suffix : string) : string {
+	if (v == null) {
+		return '—'
+	}
+	return Math.round(v).toString() + suffix
+}
+
+export function dashFixed1(v : number | null, suffix : string) : string {
+	if (v == null) {
+		return '—'
+	}
+	return v.toFixed(1) + suffix
+}
+
+export function dashCoord(v : number | null) : string {
+	if (v == null) {
+		return '—'
+	}
+	return v.toFixed(2)
+}
+
+export function barWidthPct(v : number | null) : string {
+	if (v == null) {
+		return '0%'
+	}
+	let n = v
+	if (n < 0) {
+		n = 0
+	}
+	if (n > 100) {
+		n = 100
+	}
+	return Math.round(n).toString() + '%'
+}
+
+export function chargeStatusText(status : string) : string {
+	if (status == 'charging') {
+		return '充电中'
+	}
+	if (status == 'complete') {
+		return '已充满'
+	}
+	if (status == 'idle') {
+		return '插枪空闲'
+	}
+	if (status == 'unplugged') {
+		return '未充电'
+	}
+	return '—'
+}
+
+export function pluggedNote(plugged : boolean | null) : string {
+	if (plugged == true) {
+		return '已连接充电枪'
+	}
+	if (plugged == false) {
+		return '未连接充电枪'
+	}
+	return '插枪状态未知'
+}
+
+export function notOpen() {
+	uni.showToast({
+		title: '尚未开通',
+		icon: 'none'
+	})
+}
+
+export function contentPadTop() : number {
+	return 12
+}
+
+export function contentPadBottom(tabPage : boolean) : number {
+	if (tabPage == true) {
+		return 36
+	}
+	return 24
+}
+
+export function fabOffset() : number {
+	return 16
+}
+
+export function padBoxStyle(tabPage : boolean) : string {
+	return 'padding-top:' + contentPadTop() + 'px;padding-bottom:' + contentPadBottom(tabPage) + 'px'
+}
+
+export function themeOf() : string {
+	const raw = uni.getStorageSync('fhl_theme')
+	if (raw == 'dark') {
+		return 'dark'
+	}
+	return 'light'
+}
+
+export function themePageBg() : string {
+	if (themeOf() == 'light') {
+		return '#EEF2F6'
+	}
+	return '#070B10'
+}
+
+export function pageWrapStyle() : string {
+	const bg = themePageBg()
+	const info = uni.getWindowInfo()
+	let h = info.windowHeight
+	if (h < 400) {
+		h = 400
+	}
+	return 'flex:1;min-height:' + h.toString() + 'px;background-color:' + bg
+}
+
+export function themeClassOf() : string {
+	if (themeOf() == 'light') {
+		return 'theme-light'
+	}
+	return 'theme-dark'
+}
+
+export function navIcon(name : string) : string {
+	if (themeOf() == 'light') {
+		return '/static/nav/' + name + '-on-light.png'
+	}
+	return '/static/nav/' + name + '.png'
+}
+
+export function applyThemeChrome() {
+	const light = themeOf() == 'light'
+	const themeName = light == true ? 'light' : 'dark'
+	const pageBg = themePageBg()
+	const navBg = light == true ? '#EEF2F6' : '#0B1017'
+	const tabBg = light == true ? '#FFFFFF' : '#131C27'
+	// #ifdef APP
+	uni.setAppTheme({
+		theme: themeName
+	})
+	uni.setBackgroundColor({
+		backgroundColor: pageBg,
+		backgroundColorTop: pageBg,
+		backgroundColorBottom: tabBg
+	})
+	// #endif
+	if (light == true) {
+		uni.setTabBarStyle({
+			color: '#93A5B5',
+			selectedColor: '#087E55',
+			backgroundColor: tabBg,
+			borderStyle: 'white'
+		})
+		uni.setNavigationBarColor({
+			frontColor: '#000000',
+			backgroundColor: navBg
+		})
+	} else {
+		uni.setTabBarStyle({
+			color: '#58707F',
+			selectedColor: '#2FE08D',
+			backgroundColor: tabBg,
+			borderStyle: 'black'
+		})
+		uni.setNavigationBarColor({
+			frontColor: '#ffffff',
+			backgroundColor: navBg
+		})
+	}
+	// #ifdef WEB
+	document.documentElement.style.backgroundColor = pageBg
+	document.body.style.backgroundColor = pageBg
+	// #endif
+}
+
+export function setTheme(t : string) {
+	if (t == 'light') {
+		uni.setStorageSync('fhl_theme', 'light')
+	} else {
+		uni.setStorageSync('fhl_theme', 'dark')
+	}
+	applyThemeChrome()
+}
+
+export function toggleTheme() : string {
+	let next = 'dark'
+	if (themeOf() != 'light') {
+		next = 'light'
+	}
+	setTheme(next)
+	return next
+}
+
+function parseChinaMillis(s : string) : number {
+	if (s.length < 19) {
+		return -1
+	}
+	const year = parseInt(s.substring(0, 4), 10)
+	const month = parseInt(s.substring(5, 7), 10)
+	const day = parseInt(s.substring(8, 10), 10)
+	const hour = parseInt(s.substring(11, 13), 10)
+	const minute = parseInt(s.substring(14, 16), 10)
+	const second = parseInt(s.substring(17, 19), 10)
+	const d = new Date(year, month - 1, day, hour, minute, second)
+	return d.getTime()
+}
+
+export function relativeUpdateLine(at : string | null, stale : boolean) : string {
+	if (at == null || at == '' || at == 'unknown' || at == 'null') {
+		return '尚未更新'
+	}
+	const t = parseChinaMillis(at)
+	if (t < 0) {
+		return '尚未更新'
+	}
+	const now = Date.now()
+	let mins = Math.floor((now - t) / 60000)
+	if (mins < 0) {
+		mins = 0
+	}
+	const verb = stale == true ? '未更新' : '更新'
+	if (mins < 1) {
+		if (stale == true) {
+			return '上报已久'
+		}
+		return '刚刚更新'
+	}
+	if (mins < 60) {
+		return mins.toString() + ' 分钟前' + verb
+	}
+	const hours = Math.floor(mins / 60)
+	if (hours < 24) {
+		return hours.toString() + ' 小时前' + verb
+	}
+	const days = Math.floor(hours / 24)
+	return days.toString() + ' 天前' + verb
+}
+
+// 胎压等需要固定 2 位小数的数值；null 仍显示为破折号。
+export function dashFixed2(v : number | null, suffix : string) : string {
+	if (v == null) {
+		return '—'
+	}
+	return v.toFixed(2) + suffix
+}
+
+export function dashUnknown(v : string | null) : string {
+	if (v == null) {
+		return '—'
+	}
+	const s = '' + v
+	if (s == '' || s == 'unknown' || s == 'null') {
+		return '—'
+	}
+	return s
+}
+
+// 后端已给出北京时间（如 2026-01-15 12:00:00）。前台只展示，不做时区换算。
+export function formatChinaTime(s : string | null) : string {
+	if (s == null || s == '' || s == 'unknown' || s == 'null') {
+		return '—'
+	}
+	return '' + s
+}
+
+export function timeLine(fetched : string | null, reported : string | null) : string {
+	const a = formatChinaTime(fetched)
+	if (reported == null || reported == '' || reported == 'unknown' || reported == 'null') {
+		return '同步于 ' + a
+	}
+	return '同步于 ' + a + ' · 车辆上报于 ' + formatChinaTime(reported)
+}
+
+function jsonTextFrom(d : UTSJSONObject, key : string) : string | null {
+	const v = d[key]
+	if (v == null) {
+		return null
+	}
+	return '' + v
+}
+
+export function snapshotStale(d : UTSJSONObject | null) : boolean {
+	if (d == null) {
+		return false
+	}
+	return d['stale'] == true
+}
+
+export function snapshotFreshLine(d : UTSJSONObject | null) : string {
+	if (d == null) {
+		return '还没有快照'
+	}
+	let line = timeLine(jsonTextFrom(d, 'fetchedAt'), jsonTextFrom(d, 'reportedAt'))
+	if (d['online'] == true) {
+		line = line + ' · 在线'
+	} else if (d['online'] == false) {
+		line = line + ' · 离线'
+	}
+	if (d['stale'] == true) {
+		line = line + ' · 上报已久'
+	}
+	return line
+}
+
+function send(method : RequestMethod, path : string, body : UTSJSONObject | null) : Promise<UTSJSONObject | null> {
+	return new Promise<UTSJSONObject | null>((resolve) => {
+		const header : UTSJSONObject = {
+			'Accept': 'application/json',
+			'Content-Type': 'application/json'
+		}
+		const token = sessionOf()
+		if (token != '') {
+			header['Authorization'] = 'Bearer ' + token
+		}
+		uni.request<UTSJSONObject>({
+			url: API_BASE + path,
+			method: method,
+			header: header,
+			data: body,
+			timeout: 60000,
+			success: (response) => {
+				const data = response.data
+				if (data == null) {
+					resolve(null)
+					return
+				}
+				if (data['ok'] == null && data['error'] == null) {
+					console.log('风火轮响应不是信封 ' + method + ' ' + path)
+					resolve(null)
+					return
+				}
+				resolve(data)
+			},
+			fail: (failure) => {
+				console.log('风火轮请求失败 ' + method + ' ' + path + ' ' + failure.errMsg)
+				resolve(null)
+			}
+		})
+	})
+}
+
+export function ownerRequest(method : string, path : string, body : UTSJSONObject | null) : Promise<UTSJSONObject | null> {
+	if (method == 'POST') {
+		return send('POST', path, body)
+	}
+	return send('GET', path, body)
+}
+
+export function pingHealth() : Promise<boolean> {
+	return new Promise<boolean>((resolve) => {
+		uni.request<UTSJSONObject>({
+			url: API_BASE + '/healthz',
+			method: 'GET',
+			timeout: 5000,
+			success: (response) => {
+				if (response.statusCode != 200) {
+					resolve(false)
+					return
+				}
+				const data = response.data
+				if (data == null || data['ok'] != true) {
+					resolve(false)
+					return
+				}
+				resolve(true)
+			},
+			fail: (failure) => {
+				console.log('风火轮 healthz 失败 ' + failure.errMsg)
+				resolve(false)
+			}
+		})
+	})
+}

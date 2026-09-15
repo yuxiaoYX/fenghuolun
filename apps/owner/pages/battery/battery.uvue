@@ -1,0 +1,114 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, sessionOf, dashNum, dashFixed1, snapshotFreshLine, snapshotStale, bounceIfAuthFailed, envelopeOk, envelopeData, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const v12 = ref('—')
+	const pack = ref('—')
+	const soc = ref('—')
+	const note = ref('尚未绑定')
+	const freshText = ref('尚未绑定')
+	const stale = ref(false)
+	const currentA = ref('—')
+	const v12Warn = ref(false)
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		return obj[key]
+	}
+
+	const load = async () => {
+		if (sessionOf() == '') {
+			note.value = '尚未绑定'
+			freshText.value = '尚未绑定'
+			stale.value = false
+			v12Warn.value = false
+			return
+		}
+		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
+		if (envelopeOk(res) == false) {
+			if (bounceIfAuthFailed(res) == true) {
+				return
+			}
+			note.value = '拉快照失败'
+			return
+		}
+		const d = envelopeData(res)
+		const volts = pick(pick(d, 'battery12v'), 'volts')
+		v12.value = dashFixed1(volts, '')
+		v12Warn.value = volts != null && volts < 12.2
+		pack.value = dashNum(pick(pick(d, 'battery'), 'packVoltageV'), '')
+		currentA.value = dashNum(pick(pick(d, 'battery'), 'currentA'), '')
+		soc.value = dashNum(pick(pick(d, 'power'), 'socPct'), '%')
+		freshText.value = snapshotFreshLine(d)
+		stale.value = snapshotStale(d)
+		note.value = '电流编码未对照则保持 —。SOH 无证据。'
+	}
+
+	const applyChrome = () => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(true)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	}
+
+	onLoad(() => {
+		applyChrome()
+	})
+
+	onShow(() => {
+		applyChrome()
+		load()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="fresh" :class="stale == true || v12Warn == true ? 'fresh-bad' : ''">
+				<text class="fresh-txt" :class="stale == true || v12Warn == true ? 'fresh-bad-txt' : ''">{{ v12Warn == true ? '12V 低于 12.2 V' : freshText }}</text>
+			</view>
+
+			<view class="tile" style="margin-bottom: 10px;">
+				<view class="tile-accent"></view>
+				<text class="k">满电容量估算 · 由充电记录反推</text>
+				<view class="big-row">
+					<text class="tile-v">—</text>
+				</view>
+				<text class="tile-p">没有充电账单接口，不算容量，也不填标称 kWh。</text>
+			</view>
+
+			<view class="tile" style="margin-bottom: 10px;">
+				<view class="tile-accent" :class="v12Warn == true ? 'tile-accent-oil' : ''"></view>
+				<text class="k">12V 电瓶</text>
+				<view class="big-row">
+					<text class="tile-v">{{ v12 }}</text>
+					<text class="unit"> V</text>
+				</view>
+				<text class="tile-p">{{ note }}</text>
+			</view>
+
+			<view class="tile" style="margin-bottom: 10px;">
+				<view class="tile-accent"></view>
+				<text class="k">动力电池 · 同电量对照</text>
+				<view class="big-row">
+					<text class="tile-v">{{ pack }}</text>
+					<text class="unit"> V @ {{ soc }}</text>
+				</view>
+				<text class="tile-p">电流 {{ currentA }} A · 电压下探才是可见老化</text>
+			</view>
+
+			<view class="void">
+				<text class="void-t">SOH 先不标</text>
+				<text class="note">官方无已验证健康度。绝不填 0 或 100，也不用 BMS 自称健康度。</text>
+			</view>
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>

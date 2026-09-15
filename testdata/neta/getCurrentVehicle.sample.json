@@ -1,0 +1,12 @@
+{
+  "code": 20000,
+  "description": "success",
+  "data": {
+    "vin": "TESTVIN0000000001",
+    "modelCode": "EP32",
+    "modelName": "L",
+    "marketName": "哪吒L",
+    "config": "增程示意",
+    "vehicleName": "测试车"
+  }
+}

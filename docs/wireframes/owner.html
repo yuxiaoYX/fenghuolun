@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>风火轮 · 车主前台线框</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #efe8dc;
+      --page: #f7f3ea;
+      --ink: #1c2622;
+      --muted: #6a736e;
+      --line: #ddd4c4;
+      --accent: #215e52;
+      --accent-2: #d9efe8;
+      --warn: #8a4b12;
+      --warn-bg: #f4e6d2;
+      --oil: #9a4a22;
+      --white: #fffcf6;
+      --dis: #b7aea0;
+      --good: #215e52;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100dvh;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 420px at 12% -8%, #f6efe2 0%, transparent 55%),
+        radial-gradient(800px 380px at 100% 0%, #e4efe8 0%, transparent 50%),
+        var(--paper);
+    }
+    button { font-family: inherit; cursor: pointer; }
+    .wrap {
+      max-width: 1120px; margin: 0 auto; padding: 36px 22px 72px;
+      display: grid; grid-template-columns: 400px 1fr; gap: 48px; align-items: start;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; justify-items: center; }
+      .copy { max-width: 400px; }
+    }
+    .copy h1 { font-family: Fraunces, serif; font-size: 34px; letter-spacing: -.03em; margin: 0 0 10px; }
+    .copy .lead { margin: 0 0 18px; color: var(--muted); line-height: 1.7; font-size: 15px; }
+    .pills, .toggles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .pill {
+      font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+      background: var(--white); border: 1px solid var(--line); color: var(--muted);
+    }
+    .toggles button {
+      min-height: 40px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid var(--line); background: var(--white);
+      font-size: 13px; font-weight: 600;
+    }
+    .toggles button[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+    .copy h2 {
+      font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); margin: 26px 0 8px; font-weight: 700;
+    }
+    .copy ul { margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.75; font-size: 14px; }
+    .copy li { margin: 6px 0; }
+    .vs { font-size: 13px; color: var(--ink); background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; line-height: 1.55; }
+
+    .device {
+      width: 390px; height: 844px; background: var(--page);
+      border-radius: 38px;
+      box-shadow: 0 0 0 1px #c9c0b0, 0 0 0 12px #2a2926, 0 30px 60px rgba(40,32,20,.18);
+      overflow: hidden; display: flex; flex-direction: column; position: relative;
+    }
+    .os {
+      height: 46px; padding: 0 26px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; font-weight: 600; color: var(--muted);
+    }
+    .scroll { flex: 1; overflow: auto; padding: 4px 20px 18px; }
+    .scroll::-webkit-scrollbar { width: 0; }
+    .view { display: none; }
+    .view.on { display: block; }
+
+    .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .name { font-family: Fraunces, serif; font-size: 24px; letter-spacing: -.03em; margin: 0; }
+    .meta { margin: 6px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+    .meta.stale { color: var(--warn); }
+    .icon {
+      width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--line);
+      background: var(--white); display: grid; place-items: center;
+    }
+
+    .fresh {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 12px; margin-bottom: 12px;
+      background: var(--accent-2); color: var(--accent); font-size: 12px; font-weight: 650;
+    }
+    .fresh.bad { background: var(--warn-bg); color: var(--warn); }
+    .fresh .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    .ask {
+      background: var(--white); border: 1px solid var(--line); border-radius: 22px;
+      padding: 16px; margin-bottom: 12px;
+    }
+    .ask .q { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .ask .big {
+      font-family: Fraunces, serif; font-size: 44px; letter-spacing: -.04em;
+      font-variant-numeric: tabular-nums; line-height: 1; margin: 6px 0 4px;
+    }
+    .ask .big small { font-size: 16px; font-family: "Noto Sans SC", sans-serif; color: var(--muted); margin-left: 4px; }
+    .ask .sub { font-size: 13px; color: var(--muted); }
+    .ask .sub b { color: var(--ink); }
+
+    .delta {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;
+    }
+    .delta div {
+      background: var(--white); border: 1px solid var(--line); border-radius: 16px; padding: 10px 10px 12px;
+    }
+    .delta .k { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .delta .v { font-size: 16px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .delta .v.down { color: var(--oil); }
+    .delta .v.flat { color: var(--muted); }
+    .delta .v.up { color: var(--accent); }
+
+    .two { display: grid; grid-template-columns: 1.1fr .9fr; gap: 8px; margin-bottom: 12px; }
+    .tile {
+      background: var(--white); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px;
+    }
+    .tile .k { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
+    .tile .v { font-family: Fraunces, serif; font-size: 28px; letter-spacing: -.03em; margin-top: 2px; }
+    .tile .v small { font-size: 12px; font-family: "Noto Sans SC", sans-serif; color: var(--muted); }
+    .tile p { margin: 4px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .tile.oil { background: #fbf3ec; border-color: #ead5c4; }
+    .tile.oil .v { color: var(--oil); }
+    .oil-cols i { background: #ead5c4; }
+    .oil-cols i.on { background: var(--oil); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 650;
+      background: var(--accent-2); color: var(--accent);
+    }
+    .chip.unk { background: transparent; border: 1px dashed var(--dis); color: var(--dis); }
+    .chip.quiet { background: var(--white); border: 1px solid var(--line); color: var(--ink); }
+    .chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    details.fold {
+      background: var(--white); border: 1px solid var(--line); border-radius: 16px;
+      padding: 4px 14px 8px; margin-bottom: 10px;
+    }
+    details.fold summary {
+      min-height: 44px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 13px; font-weight: 650; cursor: pointer; list-style: none;
+    }
+    details.fold summary::-webkit-details-marker { display: none; }
+    details.fold summary span { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .row { display: flex; justify-content: space-between; min-height: 30px; align-items: baseline; font-size: 14px; }
+    .row span { color: var(--muted); }
+    .row b { font-weight: 650; font-variant-numeric: tabular-nums; }
+    .dim { color: var(--dis) !important; }
+    .ok { color: var(--accent); }
+    .note { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+    .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+    .seg button {
+      min-height: 36px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--white); font-weight: 650; font-size: 13px;
+    }
+    .seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+
+    .insight {
+      display: flex; gap: 8px; overflow: auto; margin-bottom: 12px; padding-bottom: 2px;
+    }
+    .insight::-webkit-scrollbar { height: 0; }
+    .tag {
+      flex: 0 0 auto; background: var(--white); border: 1px solid var(--line);
+      border-radius: 12px; padding: 10px 12px; font-size: 12px; line-height: 1.35;
+    }
+    .tag b { display: block; font-size: 13px; margin-bottom: 2px; }
+
+    .spark {
+      background: var(--white); border: 1px solid var(--line); border-radius: 18px;
+      padding: 12px 14px 10px; margin-bottom: 12px;
+    }
+    .spark .k { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+    .cols { display: flex; align-items: flex-end; gap: 6px; height: 72px; }
+    .cols i {
+      flex: 1; background: var(--accent-2); border-radius: 4px 4px 2px 2px; display: block;
+    }
+    .cols i.on { background: var(--accent); }
+    .cols-cap { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--muted); }
+
+    .day {
+      width: 100%; text-align: left; border: 1px solid var(--line); background: var(--white);
+      border-radius: 16px; padding: 12px 14px; margin-bottom: 8px;
+      display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; min-height: 62px; align-items: center;
+    }
+    .day strong { font-size: 14px; }
+    .day .m { font-size: 12px; color: var(--muted); }
+    .day .s { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .flag { font-size: 10px; font-weight: 700; color: var(--warn); background: var(--warn-bg); padding: 2px 6px; border-radius: 999px; margin-left: 6px; }
+
+    .trend {
+      display: flex; align-items: flex-end; gap: 5px; height: 36px; margin-top: 8px;
+    }
+    .trend i { width: 8px; background: var(--accent-2); border-radius: 2px; display: block; }
+    .trend i.last { background: var(--accent); }
+
+    .void {
+      border: 1px dashed var(--line); border-radius: 16px; padding: 14px;
+      font-size: 12px; color: var(--muted); line-height: 1.55; margin-bottom: 10px; background: #fbf8f1;
+    }
+    .void b { color: var(--ink); display: block; margin-bottom: 2px; font-size: 13px; }
+
+    .item {
+      border: 1px solid var(--line); background: var(--white); border-radius: 16px;
+      padding: 12px 14px; margin-bottom: 8px; font-weight: 650; font-size: 14px;
+    }
+    .item small { display: block; margin-top: 3px; color: var(--muted); font-weight: 500; font-size: 12px; }
+    .item.wait { border-style: dashed; background: var(--warn-bg); }
+
+    .field { display: block; font-size: 13px; font-weight: 700; margin: 8px 0 6px; }
+    textarea {
+      width: 100%; min-height: 100px; border: 1px solid var(--line); border-radius: 16px;
+      padding: 12px; font: 13px/1.5 ui-monospace, Consolas, monospace; background: var(--white); resize: none;
+    }
+    .go {
+      width: 100%; min-height: 46px; margin-top: 14px; border: 0; border-radius: 14px;
+      background: var(--ink); color: var(--page); font-weight: 700;
+    }
+    .err { display: none; margin-top: 10px; font-size: 12px; color: var(--oil); font-weight: 650; }
+    .err.on { display: block; }
+
+    .tabs {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line); padding: 6px 6px 14px;
+      background: rgba(247,243,234,.94);
+    }
+    .tabs button {
+      min-height: 52px; border: 0; background: transparent; color: var(--muted);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      font-size: 11px; font-weight: 650;
+    }
+    .tabs button[aria-current="page"] { color: var(--accent); }
+    .tabs svg { width: 22px; height: 22px; }
+    .device.bind-mode .tabs { display: none; }
+
+    .sheet { display: none; position: absolute; inset: 0; background: rgba(28,38,34,.38); align-items: flex-end; z-index: 6; }
+    .sheet.open { display: flex; }
+    .panel { width: 100%; background: var(--page); border-radius: 24px 24px 0 0; padding: 14px 20px 28px; }
+    .grab { width: 36px; height: 4px; background: var(--line); border-radius: 99px; margin: 0 auto 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="device" id="device">
+      <div class="os"><span>9:41</span><span>风火轮</span></div>
+      <div class="scroll">
+
+        <section class="view" data-view="bind">
+          <div class="head">
+            <div>
+              <p class="name">开始记账</p>
+              <p class="meta">一辆车、一份自己的历史。官方云停了，这里还在。</p>
+            </div>
+          </div>
+          <label class="field" for="rt">refresh_token</label>
+          <textarea id="rt" placeholder="从官方哪吒 App 取得，整段粘贴"></textarea>
+          <p class="note">不用填网关和签名。本服务换票。不能刷车机 OTA。</p>
+          <button class="go" type="button" id="bindGo">绑定并拉第一次快照</button>
+          <p class="err" id="bindErr">换票失败：请重新填写 refresh_token</p>
+        </section>
+
+        <section class="view on" data-view="now">
+          <div class="head">
+            <div>
+              <p class="name">家里的 L</p>
+              <p class="meta" id="nowMeta">哪吒 L · EP32</p>
+            </div>
+            <button class="icon" type="button" aria-label="同步">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 0 1 14.2-5M20 12a8 8 0 0 1-14.2 5" stroke-linecap="round"/><path d="M18 4v5h-5M6 20v-5h5" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="fresh" id="fresh"><i class="dot"></i>车于 3 分钟前上报 · 刚刚同步成功</div>
+          <div class="ask">
+            <div class="q">出门够不够</div>
+            <div class="big">127<small>km 纯电</small></div>
+            <div class="sub">电量 <b>50%</b> · 综合 <b>341 km</b> · 油续航 <b>214 km</b></div>
+          </div>
+          <div class="delta">
+            <div>
+              <div class="k">相对上次</div>
+              <div class="v down">电量 −4%</div>
+            </div>
+            <div>
+              <div class="k">纯电续航</div>
+              <div class="v down">−18 km</div>
+            </div>
+            <div>
+              <div class="k">12V</div>
+              <div class="v flat">持平</div>
+            </div>
+          </div>
+          <div class="two">
+            <div class="tile">
+              <div class="k">12V 电瓶</div>
+              <div class="v">12.7<small> V</small></div>
+              <p>官方把这项埋得很深。低于 12.2 V 会在这里标出来。</p>
+            </div>
+            <div class="tile">
+              <div class="k">增程</div>
+              <div class="v" style="font-size:22px;padding-top:6px">关闭</div>
+              <p>油量 24% · 未发电</p>
+            </div>
+          </div>
+          <div class="chips">
+            <span class="chip"><i></i>已锁</span>
+            <span class="chip unk"><i></i>充电未知</span>
+            <span class="chip quiet"><i></i>门窗未验证</span>
+          </div>
+          <details class="fold">
+            <summary>车身与轮胎 <span>未知已收起，不假装全关</span></summary>
+            <div class="row"><span>四门 / 前舱 / 尾门</span><b class="dim">—</b></div>
+            <div class="row"><span>车窗 / 天窗</span><b class="dim">—</b></div>
+            <div class="row"><span>胎压</span><b class="dim">—</b></div>
+            <div class="row"><span>车内 / 车外温度</span><b class="dim">—</b></div>
+          </details>
+        </section>
+
+        <section class="view" data-view="energy">
+          <div class="head">
+            <div>
+              <p class="name">能耗账</p>
+              <p class="meta">增程车：电和油分开记，不合成一个综合数</p>
+            </div>
+            <button class="icon" type="button" id="how" aria-label="口径">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 10v6m0-8h.01" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="seg">
+            <button type="button" aria-pressed="true">本周 vs 上周</button>
+            <button type="button">按日翻账</button>
+          </div>
+          <div class="two">
+            <div class="tile">
+              <div class="k">本周用电</div>
+              <div class="v">12.3<small> kWh</small></div>
+              <p>官方统计 · 比上周少 2.1</p>
+            </div>
+            <div class="tile oil">
+              <div class="k">本周用油</div>
+              <div class="v">−3<small>%</small></div>
+              <p>油量 24%→21% · 加油已剔除</p>
+            </div>
+          </div>
+          <div class="insight">
+            <div class="tag"><b>增程介入 2 天</b>见过发电，不是全程纯电</div>
+            <div class="tag"><b>空调 16%</b>电里偏高，和烧油是两笔账</div>
+            <div class="tag"><b>9月5日加油</b>油量 +18%，不计入耗油</div>
+            <div class="tag"><b>升数约 —</b>油箱容积未对照，先记百分点</div>
+          </div>
+          <div class="spark">
+            <div class="k">近 7 日用电（官方表 + 本服务落库）</div>
+            <div class="cols" aria-hidden="true">
+              <i style="height:40%"></i><i style="height:22%"></i><i style="height:70%"></i>
+              <i style="height:35%"></i><i style="height:10%"></i><i style="height:55%"></i>
+              <i class="on" style="height:88%"></i>
+            </div>
+            <div class="cols-cap"><span>02</span><span>08</span></div>
+          </div>
+          <div class="spark">
+            <div class="k">近 7 日油量（本服务快照差分，官方能耗接口没有升）</div>
+            <div class="cols oil-cols" aria-hidden="true">
+              <i style="height:30%"></i><i style="height:8%"></i><i class="on" style="height:55%"></i>
+              <i style="height:12%"></i><i style="height:0%"></i><i style="height:18%"></i>
+              <i style="height:22%"></i>
+            </div>
+            <div class="cols-cap"><span>耗油柱 · 空日为 0 高</span><span>加油另标</span></div>
+          </div>
+          <button class="day" type="button" data-day="ac">
+            <strong>9月2日<span class="flag">增程开过</span></strong>
+            <div class="s">电 12.3 · 油 −3%</div>
+            <div class="m">行驶 8.1 kWh · 空调 2.0 · 油量 24→21</div>
+            <div class="s">两笔都有</div>
+          </button>
+          <button class="day" type="button" data-day="refuel">
+            <strong>9月5日<span class="flag">加油</span></strong>
+            <div class="s">油 +18%</div>
+            <div class="m">油量 21→39 · 不计入本周耗油</div>
+            <div class="s">剔除</div>
+          </button>
+          <button class="day" type="button" data-day="empty">
+            <strong>9月3日</strong>
+            <div class="s dim">电 — · 油持平</div>
+            <div class="m">官方空日，油量未变</div>
+            <div class="s dim">空账</div>
+          </button>
+        </section>
+
+        <section class="view" data-view="battery">
+          <div class="head">
+            <div>
+              <p class="name">电池账</p>
+              <p class="meta">先盯 12V 和同电量电压，不拿假 SOH 撑场面</p>
+            </div>
+          </div>
+          <div class="ask">
+            <div class="q">12V · 哪吒车主最常忽略</div>
+            <div class="big">12.7<small>V</small></div>
+            <div class="sub">近 7 次同步都在 12.5–12.8 · 暂无跌落</div>
+            <div class="trend" aria-hidden="true">
+              <i style="height:70%"></i><i style="height:74%"></i><i style="height:68%"></i>
+              <i style="height:80%"></i><i style="height:76%"></i><i style="height:72%"></i>
+              <i class="last" style="height:78%"></i>
+            </div>
+          </div>
+          <div class="tile" style="margin-bottom:12px">
+            <div class="k">动力电池 · 同电量对照</div>
+            <div class="v" style="font-size:26px">354.5<small> V @ 50%</small></div>
+            <p>以后每次 50% 左右都记一笔。电压往下掉才是能看见的老化，不靠 BMS 自称 97%。</p>
+          </div>
+          <div class="void">
+            <b>SOH 先空着</b>
+            官方车况没有已验证健康度。有合格慢充记录后再算。绝不填 0 或 100。
+          </div>
+          <div class="void" style="margin-bottom:0">
+            <b>电流 / 压差 / 充电会话</b>
+            编码未对照、接口未证实。风火轮宁可缺，也不抄官方乱显示。
+          </div>
+        </section>
+
+        <section class="view" data-view="more">
+          <div class="head">
+            <div>
+              <p class="name">风火轮设置</p>
+              <p class="meta">已绑定 · VIN ****0001</p>
+            </div>
+          </div>
+          <div class="item">电价 / 油价 / 油箱容积<small>电价把 kWh 翻成钱；油箱容积对照后才能把油量%写成升</small></div>
+          <div class="item">导出快照<small>JSON 留在自己手里，官方云停了还能翻</small></div>
+          <div class="item">更换 refresh_token<small>失效回到绑定页，没有短信登录</small></div>
+          <div class="item wait">远程解锁 / 空调 / 充电<small>官方首页主推这些。这里故意不放首页，未开通也不下发</small></div>
+          <div class="item">关于<small>非官方。不能 OTA。依赖官方云做实时，风火轮自己负责历史。</small></div>
+        </section>
+      </div>
+
+      <nav class="tabs">
+        <button type="button" data-go="now" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 5l8 6.5V20H4v-8.5Z"/><path d="M9 20v-6h6v6"/></svg>
+          此刻
+        </button>
+        <button type="button" data-go="energy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7" stroke-linejoin="round"/></svg>
+          能耗
+        </button>
+        <button type="button" data-go="battery">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="7" width="12" height="14" rx="2"/><path d="M10 7V4h4v3"/></svg>
+          电池
+        </button>
+        <button type="button" data-go="more">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="6" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="18" r="1.2" fill="currentColor"/></svg>
+          更多
+        </button>
+      </nav>
+      <div class="sheet" id="sheet" hidden>
+        <div class="panel">
+          <div class="grab"></div>
+          <div id="sheetBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="copy">
+      <h1>比官方多什么</h1>
+      <p class="lead">官方 App 是控车面板。风火轮是给倒闭品牌车主留历史、把藏着的数拎到前面。下面三页不再摆车图和远程三键。</p>
+      <div class="pills">
+        <span class="pill">决策优先</span>
+        <span class="pill">相对上次</span>
+        <span class="pill">自己存账</span>
+      </div>
+      <div class="toggles">
+        <button type="button" id="bindBtn" aria-pressed="false">绑定页</button>
+        <button type="button" id="staleBtn" aria-pressed="false">上报过期</button>
+      </div>
+      <div class="vs">
+        官方首页：大车图、电量、解锁/空调/充电。<br />
+        风火轮此刻：够不够出门、相对上次、12V、未知收进折叠。远程不进首页。
+      </div>
+      <h2>此刻</h2>
+      <ul>
+        <li>主问题是续航，不是把官方状态列表再画一遍。</li>
+        <li>12V 提到第一屏：哪吒车主实际痛点。</li>
+        <li>「相对上次」是风火轮才有的，官方每次打开都是一张新快照。</li>
+        <li>门窗胎压未验证就折叠，避免抄官方假装全绿。</li>
+      </ul>
+      <h2>能耗</h2>
+      <ul>
+        <li>增程车必须油电两块并排。官方能耗接口只有电，油来自油量快照差分。</li>
+        <li>加油（油量上升）单独成笔，不计入耗油。</li>
+        <li>油箱容积未对照前只记百分点，不编 L/100km。</li>
+      </ul>
+      <h2>电池</h2>
+      <ul>
+        <li>主角是 12V 趋势，不是假 SOH 大数字。</li>
+        <li>动力电池用「同一电量下的包电压」做以后能对照的账。</li>
+      </ul>
+    </aside>
+  </div>
+  <script>
+    const device = document.getElementById("device");
+    const sheet = document.getElementById("sheet");
+    const body = document.getElementById("sheetBody");
+    const openSheet = (html) => {
+      body.innerHTML = html;
+      sheet.hidden = false;
+      sheet.classList.add("open");
+      body.querySelector("[data-x]")?.addEventListener("click", closeSheet);
+    };
+    const closeSheet = () => { sheet.classList.remove("open"); sheet.hidden = true; };
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+    const go = (name) => {
+      device.classList.toggle("bind-mode", name === "bind");
+      document.querySelectorAll(".view").forEach((el) => el.classList.toggle("on", el.dataset.view === name));
+      document.querySelectorAll(".tabs button").forEach((btn) => {
+        btn.setAttribute("aria-current", btn.dataset.go === name ? "page" : "false");
+      });
+      document.getElementById("bindBtn").setAttribute("aria-pressed", String(name === "bind"));
+    };
+    document.querySelectorAll(".tabs button").forEach((btn) => btn.addEventListener("click", () => go(btn.dataset.go)));
+    document.getElementById("bindBtn").addEventListener("click", (e) => {
+      go(e.currentTarget.getAttribute("aria-pressed") !== "true" ? "bind" : "now");
+    });
+    document.getElementById("staleBtn").addEventListener("click", (e) => {
+      const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+      e.currentTarget.setAttribute("aria-pressed", String(on));
+      const f = document.getElementById("fresh");
+      f.classList.toggle("bad", on);
+      f.innerHTML = on
+        ? '<i class="dot"></i>同步成功 · 车上报已过 14 小时，数字不是现在'
+        : '<i class="dot"></i>车于 3 分钟前上报 · 刚刚同步成功';
+      go("now");
+    });
+    document.getElementById("bindGo").addEventListener("click", () => document.getElementById("bindErr").classList.add("on"));
+    document.getElementById("how").addEventListener("click", () => {
+      openSheet(`
+        <p class="name">电和油为什么拆开</p>
+        <p class="note">官方能耗接口只有 kWh 分项，没有升数。增程车若只展示电，等于把烧油那一半藏掉。</p>
+        <p class="note">油耗用连续快照的油量%差分。上升=加油，下降=耗油。油箱容积对照前不把%硬写成升，更不算 L/100km。</p>
+        <button class="go" type="button" data-x>关闭</button>
+      `);
+    });
+    document.querySelectorAll(".day").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const kind = btn.dataset.day;
+        const pages = {
+          empty: `
+            <p class="name">9月3日</p>
+            <p class="note">官方没有电耗。油量也没动。记空账，不补 0。</p>
+            <button class="go" type="button" data-x>关闭</button>
+          `,
+          refuel: `
+            <p class="name">9月5日 · 加油</p>
+            <p class="note">油量 21%→39%。记为加油，从本周耗油里剔除，避免把加油当成负油耗。</p>
+            <button class="go" type="button" data-x>关闭</button>
+          `,
+          ac: `
+            <p class="name">9月2日 · 油电都有</p>
+            <div class="row"><span>电 · 行驶</span><b>8.1 kWh</b></div>
+            <div class="row"><span>电 · 空调</span><b>2.0 kWh</b></div>
+            <div class="row"><span>电 · 回收</span><b>1.1 kWh</b></div>
+            <div class="row"><span>油量</span><b>24% → 21%</b></div>
+            <div class="row"><span>增程</span><b>见过发电</b></div>
+            <p class="note">电来自官方表，油来自快照差。两套数字不合成「综合油耗」。</p>
+            <button class="go" type="button" data-x>关闭</button>
+          `
+        };
+        openSheet(pages[kind]);
+      });
+    });
+  </script>
+</body>
+</html>

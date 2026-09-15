@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>风火轮 · 车主前台线框 v4（2.5D 车视图 + 滑动执行）</title>
+<style>
+:root[data-theme=dark]{--bg:#0a0f16;--bg2:#070b10;--pan:#111a24;--pan2:#182532;--line:#223548;--ink:#eaf2f8;--mut:#87a0b4;--ele:#2fe08d;--ele2:#0d2b1f;--oil:#f5a524;--oil2:#33250d;--warn:#ff6b52;--unk:#54687a;--scr:rgba(0,0,0,.6);--shadow:rgba(0,0,0,.5)}
+:root[data-theme=light]{--bg:#eef2f6;--bg2:#e6ecf2;--pan:#fff;--pan2:#f4f7fa;--line:#d7dfe8;--ink:#131f2b;--mut:#586a7c;--ele:#0b9a63;--ele2:#dcf4ea;--oil:#b06a00;--oil2:#fbeed3;--warn:#d2412c;--unk:#9dabb9;--scr:rgba(19,31,43,.45);--shadow:rgba(19,31,43,.18)}
+*{box-sizing:border-box}html,body{margin:0}
+body{min-height:100dvh;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--bg)}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 20px 72px;display:grid;grid-template-columns:400px 1fr;gap:44px;align-items:start}
+@media(max-width:920px){.wrap{grid-template-columns:1fr;justify-items:center}.copy{max-width:400px}}
+.copy h1{font-size:28px;margin:0 0 8px;letter-spacing:-.02em}
+.copy .lead{color:var(--mut);line-height:1.7;font-size:14px;margin:0 0 14px}
+.tg{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.tg button{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--pan);color:var(--mut);font-weight:600;font-size:13px}
+.tg button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.copy h2{font-size:12px;letter-spacing:.14em;color:var(--mut);margin:24px 0 8px;font-weight:700}
+.copy ul{margin:0;padding-left:18px;color:var(--mut);line-height:1.75;font-size:13.5px}
+.copy li{margin:5px 0}.copy b{color:var(--ink)}
+.device{width:390px;height:844px;background:var(--bg);border-radius:38px;box-shadow:0 0 0 1px var(--line),0 0 0 12px #14181c,0 30px 60px rgba(0,0,0,.35);overflow:hidden;display:flex;flex-direction:column;position:relative}
+/* FAB */
+.fab{position:absolute;right:16px;bottom:74px;width:52px;height:52px;border-radius:16px;border:1px solid var(--ele);background:var(--ele);color:#06231a;display:grid;place-items:center;font-size:26px;font-weight:700;box-shadow:0 8px 20px var(--shadow);z-index:5}
+.view{position:relative}
+.os{height:44px;padding:0 26px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;color:var(--mut)}.scroll{flex:1;overflow:auto;padding:4px 18px 18px}.scroll::-webkit-scrollbar{width:0}
+.view{display:none}.view.on{display:block}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;margin:4px 0 10px}
+.hd .nm{font-size:22px;font-weight:700;margin:0;letter-spacing:-.02em}
+.hd .mt{margin:5px 0 0;font-size:11.5px;color:var(--mut);line-height:1.45}
+.ib{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--pan);display:grid;place-items:center;color:var(--ink)}
+.num{font-variant-numeric:tabular-nums;font-family:ui-monospace,Consolas,monospace}
+.st{display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:10px;margin-bottom:10px;background:var(--ele2);color:var(--ele);font-size:11.5px;font-weight:600}
+.st.bad{background:var(--oil2);color:var(--oil)}
+.st i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+/* ===== 答案条 ===== */
+.answer{background:linear-gradient(180deg,var(--pan) 0%,var(--pan2) 100%);border:1px solid var(--line);border-radius:16px;padding:13px 15px;margin-bottom:10px}
+.answer .q{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mut)}
+.answer .a{font-size:24px;font-weight:700;margin-top:3px}
+.answer .a small{font-size:13px;color:var(--mut);font-weight:600}
+.answer .sub{font-size:12px;color:var(--mut);margin-top:3px}.answer .sub b{color:var(--ink)}
+/* ===== 2.5D 车视图 ===== */
+.stage{position:relative;background:radial-gradient(120% 90% at 50% 10%,var(--pan2) 0%,var(--pan) 70%);border:1px solid var(--line);border-radius:18px;padding:10px 8px 6px;margin-bottom:10px}
+.stage .cap{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mut);padding:0 8px 6px;font-weight:600}
+.persp{perspective:640px;perspective-origin:50% 30%}
+.tilt{transform:rotateX(54deg) rotate(-5deg);transform-origin:50% 46%;transition:transform .5s}
+.tilt svg{width:100%;display:block;overflow:visible}
+.tire{fill:var(--pan2);stroke:var(--line);stroke-width:1.5}
+.carbody{fill:var(--pan);stroke:var(--mut);stroke-width:1.8}
+.glass{stroke:var(--unk);stroke-width:1.2;stroke-dasharray:4 3;fill:none}
+.sunroof{fill:none;stroke:var(--unk);stroke-width:1;stroke-dasharray:3 3}
+.door{fill:var(--pan);stroke:var(--mut);stroke-width:1.4;transition:transform .5s cubic-bezier(.2,.9,.3,1.1),fill .3s,stroke .3s;cursor:pointer}
+.door.open{fill:var(--warn);stroke:var(--warn);filter:drop-shadow(0 0 6px var(--warn))}
+.door.l.open{transform:translateY(-16px)}
+.door.r.open{transform:translateY(16px)}
+.tail{fill:var(--pan);stroke:var(--mut);stroke-width:1.4;transition:transform .5s cubic-bezier(.2,.9,.3,1.1),fill .3s;cursor:pointer}
+.tail.open{fill:var(--warn);stroke:var(--warn);transform:translateX(20px)}
+.port{fill:var(--pan2);stroke:var(--line);stroke-width:1.4}
+.port.on{fill:var(--ele);stroke:var(--ele);animation:pul 1.6s infinite}
+@keyframes pul{0%,100%{opacity:1}50%{opacity:.45}}
+/* 浮层徽章（不随车倾斜） */
+.badge{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
+.badge .soc{background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:5px 12px;font-size:17px;font-weight:700;box-shadow:0 6px 18px var(--shadow)}
+.badge .soc small{font-size:10.5px;color:var(--mut);font-weight:600;display:block;text-align:center}
+.badge .chg{display:none;background:var(--ele2);color:var(--ele);border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700}
+.badge.charging .chg{display:block}
+.corner{position:absolute;font-size:9.5px;color:var(--mut);font-family:ui-monospace,monospace;background:color-mix(in srgb,var(--pan) 82%,transparent);border:1px solid var(--line);border-radius:7px;padding:2px 6px}
+.c-fl{left:10px;top:16px}.c-fr{right:10px;top:16px}.c-rl{left:10px;bottom:38px}.c-rr{right:10px;bottom:38px}
+.corner b{color:var(--ink)}
+.gear{position:absolute;right:14px;top:40%;background:var(--pan);border:1px solid var(--line);border-radius:10px;padding:4px 9px;font-size:11px;font-weight:800}
+.gear small{display:block;font-size:8.5px;color:var(--mut);font-weight:600;text-align:center}
+.temps{position:absolute;left:14px;top:40%;font-size:10px;color:var(--mut);background:color-mix(in srgb,var(--pan) 82%,transparent);border:1px solid var(--line);border-radius:8px;padding:3px 7px}
+.stage .hint{margin:4px 8px 2px;font-size:10.5px;color:var(--mut);line-height:1.5}
+/* ===== 快捷操作（直接点）===== */
+/* ===== 首页快捷区：解锁滑轨 + 锁车点按 ===== */
+.quickrow{display:grid;grid-template-columns:1fr 64px;gap:8px;margin-bottom:10px}
+.quickrow .slide{margin-bottom:0}
+.lockbtn{border-radius:16px;border:1px solid var(--line);background:var(--pan);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:650}
+.lockbtn svg{width:22px;height:22px}
+.lockbtn:active{background:var(--ele2);border-color:var(--ele);color:var(--ele)}
+.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.qa button{min-height:56px;border-radius:14px;border:1px solid var(--line);background:var(--pan);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11.5px;font-weight:600}
+.qa svg{width:20px;height:20px}
+.qa button.on{background:var(--ele2);border-color:var(--ele);color:var(--ele)}
+/* 指标格 */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.tile{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:12px 13px}
+.tile .k{font-size:10.5px;font-weight:700;color:var(--mut);letter-spacing:.05em}
+.tile .v{font-size:24px;font-weight:700;margin-top:3px}
+.tile .v small{font-size:11.5px;color:var(--mut);font-weight:600}
+.tile p{margin:4px 0 0;font-size:10.5px;color:var(--mut);line-height:1.45}
+.tile.oil{background:var(--oil2);border-color:transparent}.tile.oil .v{color:var(--oil)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;font-size:11.5px;font-weight:650;background:var(--ele2);color:var(--ele)}
+.chip.unk{background:transparent;border:1px dashed var(--unk);color:var(--unk)}
+.chip i{width:6px;height:6px;border-radius:50%;background:currentColor}
+details.fold{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:4px 14px 8px;margin-bottom:10px}
+details.fold summary{min-height:44px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:650;cursor:pointer;list-style:none}
+details.fold summary::-webkit-details-marker{display:none}
+details.fold summary span{color:var(--mut);font-weight:500;font-size:11.5px}
+.row{display:flex;justify-content:space-between;min-height:30px;align-items:baseline;font-size:13.5px}
+.row span{color:var(--mut)}.row b{font-weight:650}
+.dim{color:var(--unk)!important}.note{margin:6px 0 0;font-size:11px;color:var(--mut);line-height:1.5}
+/* ===== 车控页 ===== */
+.vstate{display:flex;align-items:center;gap:10px;background:var(--pan);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:12.5px}
+.vstate .dot{width:9px;height:9px;border-radius:50%;background:var(--ele)}
+.vstate b{margin-right:auto}.vstate span{color:var(--mut);font-size:11.5px}
+.sec-title{font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.08em;margin:16px 0 8px}
+.ctrl{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.ctrl button{min-height:88px;border-radius:16px;border:1px solid var(--line);background:var(--pan);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600}
+.ctrl svg{width:23px;height:23px}
+.ctrl .cs{font-size:10px;color:var(--mut);font-weight:500}
+.ctrl button.on{background:var(--ele2);border-color:var(--ele);color:var(--ele)}
+.ctrl button.off{opacity:.42}
+/* ===== 滑动执行 ===== */
+.slide{position:relative;height:58px;border-radius:16px;background:var(--pan2);border:1px solid var(--line);overflow:hidden;margin-bottom:10px;user-select:none}
+.slide .lab{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:650;color:var(--mut);letter-spacing:.06em}
+.slide .thumb{position:absolute;left:4px;top:4px;width:72px;height:48px;border-radius:12px;background:var(--warn);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:800;touch-action:none;cursor:grab;transition:left .28s cubic-bezier(.2,.8,.3,1)}
+.slide.dragging .thumb{transition:none;cursor:grabbing}
+.slide.done{border-color:var(--ele)}
+.slide.done .thumb{background:var(--ele);color:#06231a}
+.slide.off{opacity:.45;pointer-events:none}
+.slide .risk-tag{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--warn);font-weight:700}
+/* 记录卡 */
+.rec{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:9px}
+.rec .top{display:flex;justify-content:space-between;align-items:baseline}
+.rec .top strong{font-size:13.5px}
+.rec .amt{font-size:15px;font-weight:700}.rec .amt.ele{color:var(--ele)}.rec .amt.oil{color:var(--oil)}
+.rec .mid{margin-top:4px;font-size:12px;color:var(--mut)}.rec .mid b{color:var(--ink);font-weight:600}
+.rec .cal{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);font-size:11px;color:var(--mut);line-height:1.5}
+.rec .cal b{color:var(--ele);font-weight:650}.rec .cal.oilc b{color:var(--oil)}
+.chart{background:var(--pan);border:1px solid var(--line);border-radius:16px;padding:12px 14px 10px;margin-bottom:10px}
+.chart .k{font-size:11px;font-weight:700;color:var(--mut);margin-bottom:8px}
+.cols{display:flex;align-items:flex-end;gap:6px;height:56px}
+.cols i{flex:1;background:var(--ele2);border-radius:3px;display:block}
+.cols i.on{background:var(--ele)}.cols.oilc i{background:var(--oil2)}.cols.oilc i.on{background:var(--oil)}
+.cap{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--mut)}
+.trend{display:flex;align-items:flex-end;gap:5px;height:34px;margin-top:8px}
+.trend i{width:9px;background:var(--ele2);border-radius:2px;display:block}.trend i.last{background:var(--ele)}
+.void{border:1px dashed var(--line);border-radius:14px;padding:13px;font-size:11.5px;color:var(--mut);line-height:1.55;margin-bottom:10px;background:var(--pan2)}
+.void b{color:var(--ink);display:block;margin-bottom:2px;font-size:12.5px}
+.item{width:100%;text-align:left;border:1px solid var(--line);background:var(--pan);border-radius:14px;padding:12px 13px;margin-bottom:8px;color:var(--ink);font-weight:650;font-size:13.5px}
+.item small{display:block;margin-top:3px;color:var(--mut);font-weight:500;font-size:11.5px}
+.item .arrow{float:right;color:var(--mut);font-weight:400}
+.field{display:block;font-size:12.5px;font-weight:700;margin:8px 0 6px}
+textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:14px;padding:12px;font:12.5px/1.5 ui-monospace,Consolas,monospace;background:var(--pan);color:var(--ink);resize:none}
+.go{width:100%;min-height:46px;margin-top:14px;border:0;border-radius:13px;background:var(--ele);color:#06231a;font-weight:700;font-size:14.5px}
+/* 底栏 5 tab */
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);padding:6px 4px 14px;background:var(--pan)}
+.tabs button{min-height:52px;border:0;background:transparent;color:var(--mut);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;font-weight:650}
+.tabs button[aria-current=page]{color:var(--ele)}
+.tabs svg{width:21px;height:21px}
+.device.bind-mode .tabs{display:none}
+/* toast */
+.toast{position:absolute;left:50%;bottom:84px;transform:translate(-50%,20px);background:var(--bg2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:12.5px;font-weight:600;opacity:0;pointer-events:none;transition:.3s;z-index:9;white-space:nowrap}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast b{color:var(--ele)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="device" id="device">
+<div class="os"><span>9:41</span><span>风火轮</span></div>
+<div class="scroll">
+
+<!-- ============ 车况 ============ -->
+<section class="view on" data-view="now">
+  <div class="hd"><div><p class="nm">家里的 L</p><p class="mt">哪吒 L · EP32 · 增程</p></div>
+  <button class="ib" aria-label="同步"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 0 1 14.2-5M20 12a8 8 0 0 1-14.2 5" stroke-linecap="round"/><path d="M18 4v5h-5M6 20v-5h5" stroke-linecap="round"/></svg></button></div>
+  <div class="st" id="fresh"><i></i>车于 3 分钟前上报 · 同步成功</div>
+
+  <div class="answer">
+    <div class="q">出门够不够</div>
+    <div class="a num">127<small> km 纯电</small><small> · 综合 341</small></div>
+    <div class="sub">电 <b class="num">50%</b> · 油 <b class="num">24%</b> · 相对上次 <b class="num">−4% / −18 km</b></div>
+  </div>
+
+  <div class="stage">
+    <div class="cap"><span>车身巡检 · 3D</span><span class="num">odo 8,214 km</span></div>
+    <div class="persp">
+      <div class="tilt" id="tilt">
+        <svg viewBox="0 0 340 210">
+          <ellipse cx="170" cy="108" rx="150" ry="82" fill="var(--shadow)" opacity=".28"/>
+          <!-- 四轮 -->
+          <rect class="tire" x="38" y="26" width="38" height="15" rx="5"/>
+          <rect class="tire" x="264" y="26" width="38" height="15" rx="5"/>
+          <rect class="tire" x="38" y="168" width="38" height="15" rx="5"/>
+          <rect class="tire" x="264" y="168" width="38" height="15" rx="5"/>
+          <!-- 车身 -->
+          <rect class="carbody" x="58" y="14" width="224" height="182" rx="38"/>
+          <!-- 前后风挡 -->
+          <path class="glass" d="M92 44h156M96 166h148"/>
+          <!-- 天窗 -->
+          <rect class="sunroof" x="128" y="92" width="84" height="28" rx="8"/>
+          <!-- 四门（可点击开合） -->
+          <rect class="door l" x="52" y="56" width="20" height="48" rx="6" data-door/>
+          <rect class="door l" x="52" y="110" width="20" height="48" rx="6" data-door/>
+          <rect class="door r" x="268" y="56" width="20" height="48" rx="6" data-door/>
+          <rect class="door r" x="268" y="110" width="20" height="48" rx="6" data-door/>
+          <!-- 尾门 -->
+          <rect class="tail" x="140" y="176" width="60" height="16" rx="6" data-tail/>
+          <!-- 充电口 -->
+          <circle class="port" id="port" cx="86" cy="30" r="7"/>
+        </svg>
+      </div>
+    </div>
+    <!-- 浮层：电量徽章 / 挡位 / 温度 / 四胎 -->
+    <div class="badge" id="badge">
+      <div class="soc num">50%<small>127 km 纯电 · 214 km 油</small></div>
+      <div class="chg">⚡ 充电中 · 预计 04:12 满</div>
+    </div>
+    <div class="gear">P<small>驻车</small></div>
+    <div class="temps num">内 24℃ · 外 18℃</div>
+    <div class="corner c-fl num"><b>2.4</b>bar · 31℃</div>
+    <div class="corner c-fr num"><b>2.4</b>bar · 31℃</div>
+    <div class="corner c-rl num"><b>2.3</b>bar · 30℃</div>
+    <div class="corner c-rr num><b>—</b> 未验证</div>
+    <p class="hint">点车门 / 尾门可开合演示。门开=红色高亮；未验证的胎保持 —，不装全绿。</p>
+  </div>
+
+  <div class="quickrow">
+    <div class="slide" data-slide="unlock">
+      <div class="lab">滑动解锁 · 高频操作一步到位</div>
+      <div class="thumb">»» 解锁</div>
+    </div>
+    <button class="lockbtn" data-qa="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>锁车</button>
+  </div>
+  <div class="slide off" style="margin-bottom:10px">
+    <div class="lab">远程启动 · 占位，安全评审后再开</div>
+    <div class="thumb">»» 启动</div>
+    <span class="risk-tag">占位</span>
+  </div>
+
+  <div class="grid2">
+    <div class="tile"><div class="k">12V 电瓶</div><div class="v num">12.7<small> V</small></div><p>低于 12.2 V 变红置顶</p></div>
+    <div class="tile oil"><div class="k">增程 · 油量</div><div class="v num">24<small> %</small></div><p>折算约 ¥48 · 未发电</p></div>
+  </div>
+
+  <details class="fold">
+    <summary>原始读数 <span>未知保持 —，不编数</span></summary>
+    <div class="row"><span>充电状态</span><b class="dim num">未知</b></div>
+    <div class="row"><span>门窗 / 天窗</span><b class="dim num">—</b></div>
+    <div class="row"><span>位置</span><b class="num">31.23, 121.47</b></div>
+  </details>
+</section>
+
+<!-- ============ 车控 ============ -->
+<section class="view" data-view="ctrl">
+  <div class="hd"><div><p class="nm">车控</p><p class="mt">高频直接点 · 危险操作滑动执行 · 全部留痕</p></div></div>
+  <div class="vstate"><i class="dot"></i><b>在线 · P 挡 · 已锁</b><span>指令走官方云 1–3s 回执</span></div>
+
+  <div class="sec-title">温控 · 直接点</div>
+  <div class="ctrl">
+    <button class="on" data-t="ac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h11M18 12h3M6 12l-2-4m14 4-2 4m-2-4a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z"/></svg>空调<small class="cs">24℃ · 开启中</small></button>
+    <button data-t="defrost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M4 7l16 10M20 7 4 17M6 4l1.5 2M18 4 16.5 6M6 20l1.5-2M18 20l-1.5-2"/></svg>除霜<small class="cs">前后窗</small></button>
+    <button data-t="seat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 4h8a2 2 0 0 1 2 2v9H7V4ZM7 15h10v5H7v-5Z"/></svg>座椅加热<small class="cs">关</small></button>
+  </div>
+
+  <div class="sec-title">门窗与充电 · 直接点</div>
+  <div class="ctrl">
+    <button data-t="win"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/></svg>车窗<small class="cs">通风 / 全开 / 关</small></button>
+    <button data-t="sunroof"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12h18M7 8h10a5 5 0 0 1 4 4H3a5 5 0 0 1 4-4Z"/></svg>天窗通风<small class="cs">翘起</small></button>
+    <button class="on" data-t="charge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2 5 14h6l-1 8 8-12h-6l1-8Z"/></svg>充电<small class="cs">已插枪 · 可启停</small></button>
+    <button data-t="port"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>充电口<small class="cs">开 / 关</small></button>
+  </div>
+
+  <div class="sec-title">危险操作 · 滑动执行（不会误触，也无需二次弹窗）</div>
+  <div class="slide" data-slide="unlock">
+    <div class="lab">滑动解锁车门 · 30s 未开门自动回锁</div>
+    <div class="thumb">»» 解锁</div>
+  </div>
+  <div class="slide" data-slide="tailgate">
+    <div class="lab">滑动打开尾门 · 确认车后无人</div>
+    <div class="thumb">»» 尾门</div>
+  </div>
+  <div class="slide off">
+    <div class="lab">远程启动 · 需车内确认，暂不开放</div>
+    <div class="thumb">»» 启动</div>
+    <span class="risk-tag">占位</span>
+  </div>
+
+  <div class="sec-title">最近操作</div>
+  <div class="rec"><div class="top"><strong>空调 24℃ 开启</strong><span class="num" style="font-size:11px;color:var(--mut)">2 分钟前</span></div><div class="mid">指令成功 · 官方云回执 <b>0.8s</b></div></div>
+  <div class="rec"><div class="top"><strong>车窗通风</strong><span class="num" style="font-size:11px;color:var(--mut)">昨天 18:02</span></div><div class="mid">指令成功 · 留痕可查</div></div>
+</section>
+
+<!-- ============ 能耗与消费 ============ -->
+<section class="view" data-view="energy">
+  <div class="hd"><div><p class="nm">能耗与消费</p><p class="mt">电、油、钱三本账 · 每公里成本一眼看</p></div></div>
+  <div class="grid2">
+    <div class="tile"><div class="k">本月电费</div><div class="v num">¥186<small>.40</small></div><p>52.1 kWh · 谷电为主</p></div>
+    <div class="tile oil"><div class="k">本月油费</div><div class="v num">¥245<small>.00</small></div><p>1 次加油 32.5 L</p></div>
+  </div>
+  <div class="tile" style="margin-bottom:10px"><div class="k">每公里成本 · 本月</div><div class="v num">0.25<small> 元/km</small></div><p>电 0.09 + 油 0.16 · 834 km</p></div>
+  <div class="chart"><div class="k">近 7 日用电 kWh（官方表）</div>
+    <div class="cols"><i style="height:40%"></i><i style="height:22%"></i><i style="height:70%"></i><i style="height:35%"></i><i style="height:10%"></i><i style="height:55%"></i><i class="on" style="height:88%"></i></div>
+    <div class="cap"><span>周一</span><span>周日</span></div></div>
+  <div class="chart"><div class="k">近 7 日耗油（油量差分）</div>
+    <div class="cols oilc"><i style="height:30%"></i><i style="height:8%"></i><i class="on" style="height:55%"></i><i style="height:12%"></i><i style="height:2%"></i><i style="height:18%"></i><i style="height:22%"></i></div>
+    <div class="cap"><span>加油日另标</span><span>空日为 0</span></div></div>
+  <div class="sec-title">充电记录 · 点卡展开明细</div>
+  <div class="rec" data-rec>
+    <div class="top"><strong>9月8日 · 家用桩</strong><span class="amt ele num">¥9.36</span></div>
+    <div class="mid num">22% → 85% · +31.2 kWh · 4h12m · 谷电 0.30 元</div>
+    <div class="cal">电池校准：本段推算满电容量 <b>50.3 kWh</b>（标称 53）→ <b>94.9%</b>，与近 10 次均值一致</div>
+  </div>
+  <div class="rec" data-rec>
+    <div class="top"><strong>9月4日 · 快充站</strong><span class="amt ele num">¥38.20</span></div>
+    <div class="mid num">48% → 80% · +16.9 kWh · 38m · 峰电 1.20 元 + 服务费</div>
+    <div class="cal">校准：<b>50.8 kWh</b> → 96.0% · 快充段效率按 95% 折算</div>
+  </div>
+  <div class="sec-title">加油记录</div>
+  <div class="rec" data-rec>
+    <div class="top"><strong>9月5日 · 中石化</strong><span class="amt oil num">¥245.00</span></div>
+    <div class="mid num">+32.5 L · 7.54 元/L · 加满</div>
+    <div class="cal oilc">本箱油耗：8,214 → 8,390 km 用 32.5 L → <b>6.5 L/100km</b></div>
+  </div>
+  <button class="fab" data-add aria-label="记一笔充电或加油">＋</button>
+</section>
+
+<!-- ============ 电池 ============ -->
+<section class="view" data-view="battery">
+  <div class="hd"><div><p class="nm">电池</p><p class="mt">12V 趋势 + 实际容量校准，不拿假 SOH 撑场面</p></div></div>
+  <div class="st"><i></i>近 7 次同步 · 12.5–12.8 V</div>
+  <div class="tile" style="margin-bottom:10px">
+    <div class="k">满电容量估算 · 由充电记录反推</div>
+    <div class="v num">50.3<small> kWh / 53 标称</small></div>
+    <div class="trend"><i style="height:88%"></i><i style="height:90%"></i><i style="height:86%"></i><i style="height:95%"></i><i style="height:89%"></i><i style="height:92%"></i><i class="last" style="height:90%"></i></div>
+    <p>近 10 次充电段推算，快充按 95% 效率折算。方法透明可回溯。</p>
+  </div>
+  <div class="tile" style="margin-bottom:10px"><div class="k">12V 电瓶</div><div class="v num">12.7<small> V</small></div><p>静止电压。低于 12.2 V 变红置顶。</p></div>
+  <div class="tile" style="margin-bottom:10px"><div class="k">动力电池 · 同电量对照</div><div class="v num">354.5<small> V @ 50%</small></div><p>每次相近电量记一笔，电压下探才是可见老化。电流 — A（未对照）</p></div>
+  <div class="void"><b>SOH 先不标</b>官方无已验证健康度。上面的容量估算风火轮自己算，可回溯。</div>
+</section>
+
+<!-- ============ 我的 ============ -->
+<section class="view" data-view="more">
+  <div class="hd"><div><p class="nm">我的</p><p class="mt">车辆资料 · 记账设置 · 数据都在自己手里</p></div></div>
+  <div class="rec" style="margin-bottom:12px">
+    <div class="top"><strong>哪吒 L · EP32 · 增程</strong></div>
+    <div class="mid">VIN <b class="num">****0001</b> · 已绑定 · 上次同步 <b>2 分钟前</b></div>
+    <div class="cal">快照 <b>128</b> 笔 · 充电 <b>36</b> 笔 · 加油 <b>12</b> 笔 · 车控留痕 <b>89</b> 条</div>
+  </div>
+  <div class="sec-title">记账设置</div>
+  <button class="item">电价 · 峰谷时段表<small>谷电 0.30 / 峰电 1.20 元 · 花费自动算钱</small><span class="arrow">›</span></button>
+  <button class="item">油价 · 油箱容积<small>容积对照后，油量% 自动换算成升和 L/100km</small><span class="arrow">›</span></button>
+  <div class="sec-title">数据</div>
+  <button class="item">导出 JSON / CSV<small>快照、充电、加油、车控留痕全部带走</small><span class="arrow">›</span></button>
+  <button class="item">车控操作留痕<small>每次指令的时间、类型、回执，只增不改</small><span class="arrow">›</span></button>
+  <div class="sec-title">账号</div>
+  <button class="item">绑定 / 更换 refresh_token<small>从官方哪吒 App 取得，整段粘贴</small><span class="arrow">›</span></button>
+  <button class="item">解绑本机会话<small>清本机会话，服务端丢掉加密凭证</small><span class="arrow">›</span></button>
+  <button class="item">关于与免责<small>风火轮 · 哪吒 L 车友自制 · 非官方 · 无 OTA · 依赖官方云做实时</small><span class="arrow">›</span></button>
+</section>
+
+<!-- ============ 绑定 ============ -->
+<section class="view" data-view="bind">
+  <div class="hd"><div><p class="nm">开始记账</p><p class="mt">把 refresh_token 交给本服务，手机不保存官方令牌</p></div></div>
+  <label class="field" for="rt">refresh_token</label>
+  <textarea id="rt" placeholder="从官方哪吒 App 取得，整段粘贴"></textarea>
+  <p class="note">不用填网关和签名。本服务换票。不能刷车机 OTA。</p>
+  <button class="go" id="bindGo">绑定并拉第一次快照</button>
+</section>
+
+</div>
+<nav class="tabs">
+  <button data-go="now" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 5l8 6.5V20H4v-8.5Z"/><path d="M9 20v-6h6v6"/></svg>车况</button>
+  <button data-go="ctrl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>车控</button>
+  <button data-go="energy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 5 14h6l-1 8 8-12h-6l1-8Z"/></svg>能耗</button>
+  <button data-go="battery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="7" width="12" height="14" rx="2"/><path d="M10 7V4h4v3"/></svg>电池</button>
+  <button data-go="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5"/></svg>我的</button></nav>
+<div class="toast" id="toast"></div>
+</div>
+
+<aside class="copy">
+<h1>风火轮 v4 · 继续打磨</h1>
+<p class="lead">「风火轮」= 哪吒的座驾：踩上就走、出门够不够。哪吒身份放副题和关于页，主名中性、不被品牌绑死。补记入口在能耗页悬浮「＋」，第五 tab 是「我的」。</p>
+<div class="tg">
+  <button id="thBtn" aria-pressed="true">深色</button>
+  <button id="lightBtn" aria-pressed="false">浅色</button>
+  <button id="doorBtn" aria-pressed="false">演示：左后门开启</button>
+  <button id="chgBtn" aria-pressed="false">演示：充电中</button>
+  <button id="bindBtn" aria-pressed="false">绑定页</button>
+  <button id="staleBtn" aria-pressed="false">上报过期</button>
+</div>
+<h2>这版的变化</h2>
+<ul>
+  <li><b>命名</b>：App 名「风火轮」，副题「哪吒 L 车况账本 · 车友自制」。仓库 / Go module：`fenghuolun`。显示名与工程名已同步。</li>
+  <li><b>补记入口</b>：能耗页悬浮「＋」→ 弹出「记充电 / 记加油」。记账是高频动作，不藏在设置里。</li>
+  <li><b>「工具箱」→「我的」</b>：车辆资料卡（VIN、绑定状态、四本账笔数）+ 记账设置 + 数据 + 账号，车企 App 惯例语义。</li>
+  <li><b>记录卡可点</b>：能耗页充电/加油记录点击有反馈（高保真阶段展开完整明细）。</li>
+  <li>首页仍是：答案条 → 2.5D 车视图 → 解锁滑轨 + 锁车 → 12V/油量。</li>
+</ul>
+<h2>请上手试</h2>
+<ul>
+  <li>能耗页：点右下角「＋」弹出记充电/记加油选择；点充电记录卡。</li>
+  <li>车况页：拖「滑动解锁」；点车门、尾门；开「充电中」看充电口脉冲。</li>
+</ul>
+<h2>命名想听你的意见</h2>
+<ul>
+  <li>已定「风火轮」。README / docs / manifest / Go module 已同步为风火轮 / fenghuolun。</li>
+</ul>
+</aside>
+</div>
+<script>
+const device=document.getElementById("device"),root=document.documentElement,toast=document.getElementById("toast");
+let tt;const say=(h)=>{toast.innerHTML=h;toast.classList.add("on");clearTimeout(tt);tt=setTimeout(()=>toast.classList.remove("on"),2200)};
+const go=n=>{device.classList.toggle("bind-mode",n==="bind");document.querySelectorAll(".view").forEach(e=>e.classList.toggle("on",e.dataset.view===n));document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===n?"page":"false"));document.getElementById("bindBtn").setAttribute("aria-pressed",String(n==="bind"))};
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
+document.getElementById("bindBtn").addEventListener("click",e=>go(e.currentTarget.getAttribute("aria-pressed")!=="true"?"bind":"now"));
+const th=d=>{root.dataset.theme=d?"dark":"light";document.getElementById("thBtn").setAttribute("aria-pressed",String(d));document.getElementById("lightBtn").setAttribute("aria-pressed",String(!d))};
+document.getElementById("thBtn").addEventListener("click",()=>th(true));
+document.getElementById("lightBtn").addEventListener("click",()=>th(false));
+document.getElementById("staleBtn").addEventListener("click",e=>{const on=e.currentTarget.getAttribute("aria-pressed")!=="true";e.currentTarget.setAttribute("aria-pressed",String(on));const f=document.getElementById("fresh");f.classList.toggle("bad",on);f.innerHTML=on?'<i></i>同步成功 · 车上报已过 14 小时，数字不是现在':'<i></i>车于 3 分钟前上报 · 同步成功'});
+/* 车门/尾门点击 */
+document.querySelectorAll("[data-door]").forEach(d=>d.addEventListener("click",()=>{d.classList.toggle("open");say(d.classList.contains("open")?"车门状态：<b>开启</b>（演示）":"车门状态：关闭")}));
+document.querySelectorAll("[data-tail]").forEach(d=>d.addEventListener("click",()=>{d.classList.toggle("open");say(d.classList.contains("open")?"尾门：<b>开启</b>（演示）":"尾门：关闭")}));
+/* 演示开关 */
+const doors=document.querySelectorAll(".door");
+document.getElementById("doorBtn").addEventListener("click",e=>{const on=e.currentTarget.getAttribute("aria-pressed")!=="true";e.currentTarget.setAttribute("aria-pressed",String(on));doors[1].classList.toggle("open",on)});
+document.getElementById("chgBtn").addEventListener("click",e=>{const on=e.currentTarget.getAttribute("aria-pressed")!=="true";e.currentTarget.setAttribute("aria-pressed",String(on));document.getElementById("port").classList.toggle("on",on);document.getElementById("badge").classList.toggle("charging",on)});
+/* 快捷操作 */
+const QAT={lock:["锁车","<b>已锁车</b> · 指令已下发"],ac:["空调","24℃ · 已开启","已关闭"],vent:["车窗通风","已切到通风","车窗已关"],find:["寻车","鸣笛 3 声 + 双闪 30s",""]};
+document.querySelectorAll("[data-qa]").forEach(b=>b.addEventListener("click",()=>{const q=QAT[b.dataset.qa];if(b.dataset.qa==="find"){say(q[1]);return}if(b.dataset.qa==="lock"){say(q[1]);return}const on=b.classList.toggle("on");say(q[0]+"："+(on?q[1]:q[2]))}));
+/* 车控直接点 */
+document.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>{const on=b.classList.toggle("on");say("指令已下发："+b.textContent.trim().slice(0,4)+(on?" · 开":" · 关"))}));
+/* 记录卡点击 */
+document.querySelectorAll("[data-rec]").forEach(r=>r.addEventListener("click",()=>{r.style.outline="2px solid var(--ele)";say("展开明细：<b>花费/度电/校准推算</b>（高保真补全）");setTimeout(()=>r.style.outline="",900)}));
+/* FAB 记一笔 */
+document.querySelectorAll("[data-add]").forEach(f=>f.addEventListener("click",()=>say("<b>记一笔</b>：充电 / 加油 / 洗车养护（表单高保真补全）")));
+/* ===== 滑动执行 ===== */
+document.querySelectorAll(".slide:not(.off)").forEach(sl=>{
+  const thumb=sl.querySelector(".thumb");let sx=0,cur=0,max=0,drag=false;
+  const set=x=>{cur=Math.max(0,Math.min(x,max));thumb.style.left=(4+cur)+"px"};
+  thumb.addEventListener("pointerdown",e=>{max=sl.clientWidth-thumb.clientWidth-8;drag=true;sx=e.clientX-cur;sl.classList.add("dragging");thumb.setPointerCapture(e.pointerId)});
+  thumb.addEventListener("pointermove",e=>{if(!drag)return;set(e.clientX-sx)});
+  const end=()=>{if(!drag)return;drag=false;sl.classList.remove("dragging");
+    if(cur>max*0.82){sl.classList.add("done");thumb.textContent="✓ 已执行";say("<b>"+({unlock:"车门已解锁",tailgate:"尾门已开启"})[sl.dataset.slide]+"</b> · 30s 未开门自动回锁");setTimeout(()=>{sl.classList.remove("done");thumb.textContent="»» "+({unlock:"解锁",tailgate:"尾门"})[sl.dataset.slide];set(0)},1800)}
+    else set(0)};
+  thumb.addEventListener("pointerup",end);thumb.addEventListener("pointercancel",end);
+});
+</script>
+</body>
+</html>

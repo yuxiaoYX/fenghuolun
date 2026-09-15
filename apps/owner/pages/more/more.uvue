@@ -1,0 +1,206 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, sessionOf, clearSession, bounceIfAuthFailed, envelopeOk, envelopeData, dashUnknown, formatChinaTime, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome, themeOf, setTheme } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const isDark = ref(false)
+	const bound = ref(false)
+	const carTitle = ref('尚未绑定')
+	const carMid = ref('从官方哪吒 App 取得 refresh_token')
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		return obj[key]
+	}
+
+	const load = async () => {
+		if (sessionOf() == '') {
+			bound.value = false
+			carTitle.value = '尚未绑定'
+			carMid.value = '从官方哪吒 App 取得 refresh_token'
+			return
+		}
+		const res = await ownerRequest('GET', '/api/v1/owner/vehicle', null)
+		if (envelopeOk(res) == false) {
+			if (bounceIfAuthFailed(res) == true) {
+				bound.value = false
+				return
+			}
+			bound.value = false
+			carTitle.value = '会话失效'
+			carMid.value = '请重新绑定'
+			return
+		}
+		bound.value = true
+		const d = envelopeData(res)
+		const model = pick(d, 'modelName')
+		const trim = pick(d, 'trim')
+		if (trim != null && trim != '') {
+			carTitle.value = '' + model + ' · ' + trim
+		} else {
+			carTitle.value = '' + model
+		}
+		carMid.value = 'VIN ' + pick(d, 'vinMasked')
+		const sync = await ownerRequest('GET', '/api/v1/owner/sync/latest', null)
+		if (envelopeOk(sync) == true) {
+			const s = envelopeData(sync)
+			const status = dashUnknown(pick(s, 'status'))
+			const at = formatChinaTime(pick(s, 'syncedAt'))
+			carMid.value = 'VIN ' + pick(d, 'vinMasked') + ' · 上次同步 ' + at + ' · ' + status
+		}
+	}
+
+	const goBind = () => {
+		uni.navigateTo({
+			url: '/pages/bind/bind'
+		})
+	}
+
+	const tapAbout = () => {
+		uni.showModal({
+			title: '关于风火轮',
+			content: '风火轮 · 哪吒 L 车友自制 · 非官方 · 无 OTA。实时依赖官方云。服务端需设置 FENGHUOLUN_TOKEN_KEK。',
+			showCancel: false
+		})
+	}
+
+	const unbind = async () => {
+		if (sessionOf() != '') {
+			await ownerRequest('POST', '/api/v1/owner/unbind', null)
+		}
+		clearSession()
+		bound.value = false
+		carTitle.value = '尚未绑定'
+		carMid.value = '从官方哪吒 App 取得 refresh_token'
+	}
+
+	const applyChrome = () => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(true)
+		wrapStyle.value = pageWrapStyle()
+		isDark.value = themeOf() != 'light'
+		applyThemeChrome()
+	}
+
+	const chooseTheme = (t : string) => {
+		setTheme(t)
+		applyChrome()
+	}
+
+	onLoad(() => {
+		applyChrome()
+	})
+
+	onShow(() => {
+		applyChrome()
+		load()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="group" v-if="bound == false">
+				<view class="row" @click="goBind">
+					<view class="row-main">
+						<text class="row-t">{{ carTitle }}</text>
+						<text class="row-s">{{ carMid }}</text>
+					</view>
+					<text class="row-go">去绑定</text>
+				</view>
+			</view>
+
+			<view class="group" v-if="bound == true">
+				<view class="row">
+					<view class="row-main">
+						<text class="row-t">{{ carTitle }}</text>
+						<text class="row-s">{{ carMid }}</text>
+					</view>
+				</view>
+				<view class="hair"></view>
+				<view class="row" @click="goBind">
+					<view class="row-main">
+						<text class="row-t">更换 refresh_token</text>
+						<text class="row-s">整段粘贴，本机不保存官方令牌</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+				<view class="hair"></view>
+				<view class="row" @click="unbind">
+					<view class="row-main">
+						<text class="row-t">解绑本机会话</text>
+						<text class="row-s">清本机会话，服务端丢掉加密凭证</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+			</view>
+
+			<text class="sec-title">外观</text>
+			<view class="theme-row">
+				<view class="theme-pill" :class="isDark == false ? 'theme-pill-on' : ''" @click="chooseTheme('light')">
+					<text class="theme-pill-txt" :class="isDark == false ? 'theme-pill-on-txt' : ''">浅色</text>
+				</view>
+				<view class="theme-gap"></view>
+				<view class="theme-pill" :class="isDark == true ? 'theme-pill-on' : ''" @click="chooseTheme('dark')">
+					<text class="theme-pill-txt" :class="isDark == true ? 'theme-pill-on-txt' : ''">深色</text>
+				</view>
+			</view>
+
+			<text class="sec-title">记账</text>
+			<view class="group">
+				<view class="row" @click="notOpen">
+					<view class="row-main">
+						<text class="row-t">电价 · 峰谷时段</text>
+						<text class="row-s">尚未开通</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+				<view class="hair"></view>
+				<view class="row" @click="notOpen">
+					<view class="row-main">
+						<text class="row-t">油价 · 油箱容积</text>
+						<text class="row-s">容积对照后才换算升</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+			</view>
+
+			<text class="sec-title">数据</text>
+			<view class="group">
+				<view class="row" @click="notOpen">
+					<view class="row-main">
+						<text class="row-t">导出 JSON / CSV</text>
+						<text class="row-s">尚未开通</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+				<view class="hair"></view>
+				<view class="row" @click="notOpen">
+					<view class="row-main">
+						<text class="row-t">车控操作留痕</text>
+						<text class="row-s">尚未开通</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+			</view>
+
+			<text class="sec-title">关于</text>
+			<view class="group">
+				<view class="row" @click="tapAbout">
+					<view class="row-main">
+						<text class="row-t">关于与免责</text>
+						<text class="row-s">非官方 · 无 OTA · 云停则无法实时同步</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+			</view>
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>

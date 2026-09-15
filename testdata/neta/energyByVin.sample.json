@@ -1,0 +1,16 @@
+{
+  "code": 20000,
+  "description": "success",
+  "data": [
+    {
+      "vin": "TESTVIN0000000001",
+      "countTime": "2026-09-02",
+      "totalConsumesEnergy": 12.3,
+      "drivingConsumesEnergy": 8.1,
+      "airConditionersConsumesEnergy": 2.0,
+      "recoveryConsumesEnergy": 1.1,
+      "windResistanceConsumesEnergy": 0.8,
+      "attachmentConsumesEnergy": 0.3
+    }
+  ]
+}

@@ -50,7 +50,20 @@ func WriteBiz(r *ghttp.Request, err error) {
 	msg := err.Error()
 	switch {
 	case strings.HasPrefix(msg, "invalid_request"):
-		WriteErr(r, http.StatusBadRequest, "invalid_request", "请填写 refresh_token")
+		public := "请求不合法"
+		switch {
+		case strings.Contains(msg, "refresh_token") || strings.TrimSpace(strings.TrimPrefix(msg, "invalid_request:")) == "":
+			public = "请填写 refresh_token"
+		case strings.Contains(msg, "sync already running"):
+			public = "该车正在同步"
+		case strings.Contains(msg, "password"):
+			public = "新密码至少 8 位"
+		case strings.Contains(msg, "unknown table"):
+			public = "没有这张表"
+		case strings.Contains(msg, "nickname"):
+			public = "备注名最多 32 字"
+		}
+		WriteErr(r, http.StatusBadRequest, "invalid_request", public)
 	case strings.HasPrefix(msg, "unauthorized"):
 		WriteErr(r, http.StatusUnauthorized, "unauthorized", "请先绑定")
 	case strings.HasPrefix(msg, "not_found"):

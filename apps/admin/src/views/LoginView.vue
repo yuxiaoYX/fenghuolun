@@ -1,46 +1,48 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { App, Button, Card, Form, FormItem, Input, InputPassword } from 'antdv-next'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ApiError, api, getToken, setToken } from '../api'
 
 const router = useRouter()
+const { message } = App.useApp()
 const username = ref('')
 const password = ref('')
-const err = ref('')
+const loading = ref(false)
+
+onMounted(() => {
+  if (getToken()) {
+    router.replace('/')
+  }
+})
 
 async function submit() {
-  err.value = ''
+  loading.value = true
   try {
-    const res = await fetch('/api/v1/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.value, password: password.value }),
-    })
-    const body = (await res.json()) as { ok?: boolean; data?: { session?: string }; error?: { message?: string } }
-    if (!body.ok || !body.data?.session) {
-      err.value = body.error?.message ?? '登录失败'
-      return
-    }
-    localStorage.setItem('fhl_admin', body.data.session)
-    router.push('/')
-  } catch {
-    err.value = '后端未启动（默认 :8080）'
+    const data = await api.login(username.value, password.value)
+    setToken(data.session)
+    await router.push('/')
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '登录失败')
+  } finally {
+    loading.value = false
   }
 }
 </script>
 
 <template>
-  <main class="page">
-    <section class="card">
-      <h1>风火轮管理</h1>
-      <p>仅管理员。用 FENGHUOLUN_ADMIN_BOOTSTRAP_* 创建第一位账号。</p>
-      <form @submit.prevent="submit">
-        <label for="user">用户名</label>
-        <input id="user" v-model="username" autocomplete="username" />
-        <label for="pass">密码</label>
-        <input id="pass" v-model="password" type="password" autocomplete="current-password" />
-        <button type="submit">进入</button>
-      </form>
-      <p v-if="err" class="status">{{ err }}</p>
-    </section>
-  </main>
+  <div class="login-wrap">
+    <Card class="login-card" title="风火轮管理">
+      <p style="margin-top: 0; opacity: 0.7">仅管理员。第一位账号用 FENGHUOLUN_ADMIN_BOOTSTRAP_* 创建。</p>
+      <Form layout="vertical" @submit.prevent="submit">
+        <FormItem label="用户名">
+          <Input v-model:value="username" autocomplete="username" />
+        </FormItem>
+        <FormItem label="密码">
+          <InputPassword v-model:value="password" autocomplete="current-password" />
+        </FormItem>
+        <Button type="primary" html-type="submit" block :loading="loading">进入</Button>
+      </Form>
+    </Card>
+  </div>
 </template>

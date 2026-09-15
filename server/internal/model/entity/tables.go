@@ -49,13 +49,25 @@ type Energy struct {
 }
 
 type SyncJob struct {
-	BindingId   string
-	Status      string
-	ErrorPublic string
-	SyncedAt    int64
-	CreatedAt   int64
-	UpdatedAt   int64
-	DeletedAt   int64
+	Id            string
+	BindingId     string
+	Kind          string
+	Status        string
+	ErrorPublic   string
+	ErrorInternal string
+	StartedAt     int64
+	FinishedAt    int64
+	CreatedAt     int64
+	UpdatedAt     int64
+	DeletedAt     int64
+}
+
+type AppSetting struct {
+	Key       string
+	Value     string
+	CreatedAt int64
+	UpdatedAt int64
+	DeletedAt int64
 }
 
 type AdminUser struct {
@@ -68,6 +80,7 @@ type AdminUser struct {
 
 type AdminSession struct {
 	TokenHash string
+	Username  string
 	CreatedAt int64
 	UpdatedAt int64
 	DeletedAt int64

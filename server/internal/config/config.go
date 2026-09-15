@@ -11,6 +11,7 @@ type Config struct {
 	CORSOrigins    string
 	ScaleCandidate bool
 	CronSync       string
+	AdminDir       string
 }
 
 func Load() Config {
@@ -25,6 +26,7 @@ func Load() Config {
 		CORSOrigins:    getenv("FENGHUOLUN_CORS_ORIGINS", ""),
 		ScaleCandidate: scale == "candidate",
 		CronSync:       os.Getenv("FENGHUOLUN_CRON_SYNC"),
+		AdminDir:       os.Getenv("FENGHUOLUN_ADMIN_DIR"),
 	}
 }
 

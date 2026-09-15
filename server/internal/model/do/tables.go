@@ -58,14 +58,27 @@ type Energy struct {
 }
 
 type SyncJob struct {
-	g.Meta      `orm:"table:sync_job, do:true"`
-	BindingId   interface{}
-	Status      interface{}
-	ErrorPublic interface{}
-	SyncedAt    interface{}
-	CreatedAt   interface{}
-	UpdatedAt   interface{}
-	DeletedAt   interface{}
+	g.Meta         `orm:"table:sync_job, do:true"`
+	Id             interface{}
+	BindingId      interface{}
+	Kind           interface{}
+	Status         interface{}
+	ErrorPublic    interface{}
+	ErrorInternal  interface{}
+	StartedAt      interface{}
+	FinishedAt     interface{}
+	CreatedAt      interface{}
+	UpdatedAt      interface{}
+	DeletedAt      interface{}
+}
+
+type AppSetting struct {
+	g.Meta    `orm:"table:app_settings, do:true"`
+	Key       interface{}
+	Value     interface{}
+	CreatedAt interface{}
+	UpdatedAt interface{}
+	DeletedAt interface{}
 }
 
 type AdminUser struct {
@@ -80,6 +93,7 @@ type AdminUser struct {
 type AdminSession struct {
 	g.Meta    `orm:"table:admin_session, do:true"`
 	TokenHash interface{}
+	Username  interface{}
 	CreatedAt interface{}
 	UpdatedAt interface{}
 	DeletedAt interface{}

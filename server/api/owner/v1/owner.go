@@ -5,6 +5,7 @@ import (
 
 	"fenghuolun/internal/clock"
 	"fenghuolun/internal/neta"
+	"fenghuolun/internal/store"
 )
 
 type BindReq struct {
@@ -34,6 +35,11 @@ type VehicleReq struct {
 	g.Meta `path:"/vehicle" method:"get" tags:"Owner"`
 }
 
+type VehiclePutReq struct {
+	g.Meta   `path:"/vehicle" method:"put" tags:"Owner" summary:"改车辆备注名"`
+	Nickname string `json:"nickname"`
+}
+
 type VehicleRes struct {
 	Nickname   string `json:"nickname"`
 	ModelCode  string `json:"modelCode"`
@@ -45,6 +51,17 @@ type VehicleRes struct {
 
 type SnapshotReq struct {
 	g.Meta `path:"/snapshot/latest" method:"get" tags:"Owner"`
+}
+
+type SnapshotsReq struct {
+	g.Meta   `path:"/snapshots" method:"get" tags:"Owner"`
+	Page     int `json:"page"`
+	PageSize int `json:"pageSize"`
+}
+
+type SnapshotsRes struct {
+	Items []store.SnapshotSummary `json:"items"`
+	Total int                     `json:"total"`
 }
 
 type SnapshotRes struct {

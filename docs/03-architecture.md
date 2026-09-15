@@ -1,8 +1,8 @@
 # 架构
 
-## 目标结构（重构后）
+## 目标结构
 
-当前根目录的 Vite 应用 **不是** 目标形态。目标单仓：
+根目录旧 Vite 原型已删除。当前单仓：
 
 ```
 fenghuolun/
@@ -11,7 +11,7 @@ fenghuolun/
   docs/                 权威文档（本目录）
   apps/
     owner/              uni-app x 车主前台（蒸汽模式）
-    admin/              Vue3 管理员 Web
+    admin/              Vue3 + antdv-next 管理员 Web
   server/               GoFrame v2 模块（gf init 结构）
     main.go             gf cmd 入口
     api/                请求/响应 + g.Meta 路由
@@ -20,12 +20,12 @@ fenghuolun/
     internal/
       cmd/              gcmd.Command
       boot/             注册路由
-      controller/       health / owner
-      middleware/       信封、CORS、车主会话
+      controller/       health / owner / admin
+      middleware/       信封、CORS、车主/管理员会话
       owner/            绑定与同步业务
       neta/             官方协议客户端与解码（不依赖 ghttp）
-      store/            第 1 期内存；第 2 期 gdb+SQLite
-      dao/ model/ service/  留给 gf gen
+      store/            gdb + SQLite（contrib sqlite，无 cgo）
+      model/do|entity   表结构
   testdata/
     neta/               仅解码单测用的脱敏 JSON
 ```
@@ -50,7 +50,7 @@ fenghuolun/
 | 端 | 可以做 | 不可以做 |
 |---|---|---|
 | owner | 展示解码后的领域对象、提交 refresh_token、请求同步 | 持有官方 Access Token、自拼签名、直连官方 |
-| admin | 列表、状态、脱敏日志、禁用某绑定 | 用管理员身份拉某一辆车的明文 token、代替车主发车控 |
+| admin | 绑定运维、任务历史、脱敏库表、运行时设置 | 用管理员身份拉明文 token、代替车主发车控、SQL 控制台、地图 |
 | server | 换票、官方 HTTP、解码、加密存储、鉴权 | 把官方响应原样倒给前端（必须先解码/脱敏） |
 
 ## 数据流
@@ -58,19 +58,19 @@ fenghuolun/
 ### 绑定
 
 1. 车主提交 `refresh_token`
-2. `internal/neta` 换票（路径待验证，见 V1）
+2. `internal/neta` 换票（`refreshApiToken`，V1 已探活）
 3. 调用 `getCurrentVehicle`，得到 VIN、车型、绑定关系
 4. 用 KEK 加密 refresh/access 入库
 5. 签发本服务 `owner_session`
 6. 前台只存本服务会话
 
-### 同步（定时或手动）
+### 同步（定时、车主手动、管理员立即同步）
 
 1. 取出凭证，必要时换票；若官方返回新 refresh，覆盖存储
 2. `getAppVehicleData` → 解码为 `VehicleSnapshot`
-3. `findEnergyConsumptionStatistics` + `queryEnergyConsumptionByVin` → `OfficialEnergy*`
+3. `queryEnergyConsumptionByVin` → `OfficialEnergy*`
 4. 分别写入 `fetchedAt` / `reportedAt`
-5. 失败写入 `sync_job`（错误分类：auth / upstream / decode），**日志不含 token 与完整 VIN**（VIN 只存脱敏或哈希+后四位策略见安全文档）
+5. `sync_job` 追加一行：先 `running`，结束写 `ok` / `auth_failed` / `upstream` / `decode`。**日志不含 token 与完整 VIN**
 
 ### 展示
 
@@ -91,10 +91,10 @@ fenghuolun/
 
 哪个 source 由 `source_id = neta` 标识。以后的车型是新的 `internal/<brand>`，不是 if-else 洒在 HTTP 层。
 
-## 部署形态（一期）
+## 部署形态
 
-- 单机自托管：一个 Go 进程 + 本地 SQLite 文件 + 静态托管 admin；owner 以 App 安装包或连接该 API 的 H5
-- CORS：admin 与 owner H5 的来源白名单来自环境变量
+- 单机自托管：一个 Go 进程 + 本地 SQLite 文件；admin 用 Vite 开发代理或静态托管构建产物；owner 以 App 安装包或连接该 API 的 H5
+- CORS：空库时从环境变量写入 `app_settings`，之后以后台设置为准；本机 `127.0.0.1` / `localhost` 端口始终放行
 - 不默认公网多租户 SaaS。若同一实例服务多个车主，仍然是「多个 refresh_token 绑定」，不是开放注册社区
 
 ## 与现网官方云的关系
@@ -108,4 +108,4 @@ fenghuolun/
 
 - 根目录 `src/`、`vite.config.ts`、`vite-official-proxy.ts`、`index.html`、旧 tsconfig
 - 浏览器指定 `X-Upstream` 的官方代理
-- 根目录不再是 Vue 应用；`package.json` 只保留 workspace 脚本
+- 根目录不再是 Vue 应用

@@ -1,6 +1,7 @@
 package owner
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -74,15 +75,15 @@ func (s *Service) Sync(session string) (*store.Binding, error) {
 	if b == nil {
 		return nil, fmt.Errorf("unauthorized")
 	}
-	return s.syncBinding(b)
+	return s.syncBinding(b, "manual")
 }
 
-func (s *Service) SyncByID(id string) (*store.Binding, error) {
+func (s *Service) SyncByID(id, kind string) (*store.Binding, error) {
 	b := s.Store.GetByID(id)
 	if b == nil {
 		return nil, fmt.Errorf("not_found")
 	}
-	return s.syncBinding(b)
+	return s.syncBinding(b, kind)
 }
 
 func (s *Service) SyncAllActive() {
@@ -91,7 +92,7 @@ func (s *Service) SyncAllActive() {
 		return
 	}
 	for _, id := range ids {
-		_, _ = s.SyncByID(id)
+		_, _ = s.SyncByID(id, "cron")
 	}
 }
 
@@ -99,36 +100,80 @@ func (s *Service) Disable(id string) error {
 	return s.Store.SetDisabled(id, true)
 }
 
-func (s *Service) syncBinding(b *store.Binding) (*store.Binding, error) {
+func (s *Service) Enable(id string) error {
+	return s.Store.SetDisabled(id, false)
+}
+
+func (s *Service) Kick(id string) error {
+	return s.Store.KickSessions(id)
+}
+
+func (s *Service) StaleAfter() time.Duration {
+	if s == nil || s.Store == nil {
+		return neta.StaleAfter
+	}
+	return s.Store.StaleAfter()
+}
+
+func (s *Service) syncBinding(b *store.Binding, kind string) (*store.Binding, error) {
+	if kind == "" {
+		kind = "manual"
+	}
 	if b.Disabled {
 		return nil, fmt.Errorf("not_found")
 	}
-	now := time.Now().UTC()
+	jobID, err := s.Store.BeginJob(b.ID, kind)
+	if err != nil {
+		return nil, err
+	}
+	fail := func(status, public string, cause error) {
+		internal := ""
+		if cause != nil {
+			internal = cause.Error()
+		}
+		_ = s.Store.FinishJob(jobID, status, public, internal, time.Now().UTC())
+	}
 	rt := b.RefreshToken
 	if rt == "" {
-		_ = s.Store.MarkSync(b.ID, "auth_failed", "请重新填写 refresh_token", now)
+		fail("auth_failed", "请重新填写 refresh_token", neta.ErrTokenInvalid)
 		return b, neta.ErrTokenInvalid
 	}
 	pair, err := s.Client.Refresh(rt)
 	if err != nil {
-		_ = s.Store.MarkSync(b.ID, "auth_failed", "请重新填写 refresh_token", now)
+		status, public := classifySync(err)
+		fail(status, public, err)
 		return b, err
 	}
 	nb, err := s.pullLive(pair)
 	if err != nil {
-		_ = s.Store.MarkSync(b.ID, "upstream", "官方云暂不可用", now)
+		status, public := classifySync(err)
+		fail(status, public, err)
 		return b, err
 	}
 	nb.ID = b.ID
 	nb.Session = b.Session
 	nb.RefreshHint = b.RefreshHint
+	nb.SyncKind = kind
+	nb.JobID = jobID
 	if err := s.Store.Put(nb); err != nil {
+		fail("upstream", "落库失败", err)
 		return nil, err
 	}
 	if b.Session != "" {
 		return s.Store.Get(b.Session), nil
 	}
 	return s.Store.GetByID(b.ID), nil
+}
+
+func classifySync(err error) (status, public string) {
+	switch {
+	case errors.Is(err, neta.ErrTokenInvalid):
+		return "auth_failed", "请重新填写 refresh_token"
+	case errors.Is(err, neta.ErrDecode):
+		return "decode", "官方响应结构变了"
+	default:
+		return "upstream", "官方云暂不可用"
+	}
 }
 
 func (s *Service) pullLive(pair neta.TokenPair) (*store.Binding, error) {

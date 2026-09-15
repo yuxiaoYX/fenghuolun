@@ -9,6 +9,7 @@
 	const bound = ref(false)
 	const carTitle = ref('尚未绑定')
 	const carMid = ref('从官方哪吒 App 取得 refresh_token')
+	const nickname = ref('')
 
 	const pick = (obj, key) => {
 		if (obj == null) {
@@ -39,10 +40,17 @@
 		const d = envelopeData(res)
 		const model = pick(d, 'modelName')
 		const trim = pick(d, 'trim')
-		if (trim != null && trim != '') {
-			carTitle.value = '' + model + ' · ' + trim
+		const nick = pick(d, 'nickname')
+		if (nick != null && nick != '') {
+			nickname.value = '' + nick
+			carTitle.value = '' + nick
 		} else {
-			carTitle.value = '' + model
+			nickname.value = ''
+			if (trim != null && trim != '') {
+				carTitle.value = '' + model + ' · ' + trim
+			} else {
+				carTitle.value = '' + model
+			}
 		}
 		carMid.value = 'VIN ' + pick(d, 'vinMasked')
 		const sync = await ownerRequest('GET', '/api/v1/owner/sync/latest', null)
@@ -57,6 +65,46 @@
 	const goBind = () => {
 		uni.navigateTo({
 			url: '/pages/bind/bind'
+		})
+	}
+
+	const goHistory = () => {
+		if (bound.value == false) {
+			goBind()
+			return
+		}
+		uni.navigateTo({
+			url: '/pages/history/history'
+		})
+	}
+
+	const editNick = () => {
+		if (bound.value == false) {
+			return
+		}
+		uni.showModal({
+			title: '车辆备注',
+			editable: true,
+			content: nickname.value,
+			success: async (res) => {
+				if (res.confirm != true) {
+					return
+				}
+				const name = '' + res.content
+				const out = await ownerRequest('PUT', '/api/v1/owner/vehicle', {
+					nickname: name
+				})
+				if (envelopeOk(out) == true) {
+					load()
+					return
+				}
+				if (bounceIfAuthFailed(out) == false) {
+					uni.showToast({
+						title: '备注没存上',
+						icon: 'none'
+					})
+				}
+			}
 		})
 	}
 
@@ -116,11 +164,12 @@
 			</view>
 
 			<view class="group" v-if="bound == true">
-				<view class="row">
+				<view class="row" @click="editNick">
 					<view class="row-main">
 						<text class="row-t">{{ carTitle }}</text>
-						<text class="row-s">{{ carMid }}</text>
+						<text class="row-s">{{ carMid }} · 点此改备注</text>
 					</view>
+					<text class="row-chev">›</text>
 				</view>
 				<view class="hair"></view>
 				<view class="row" @click="goBind">
@@ -172,6 +221,14 @@
 
 			<text class="sec-title">数据</text>
 			<view class="group">
+				<view class="row" @click="goHistory">
+					<view class="row-main">
+						<text class="row-t">车况历史</text>
+						<text class="row-s">本服务已落库的快照</text>
+					</view>
+					<text class="row-chev">›</text>
+				</view>
+				<view class="hair"></view>
 				<view class="row" @click="notOpen">
 					<view class="row-main">
 						<text class="row-t">导出 JSON / CSV</text>

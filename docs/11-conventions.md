@@ -25,9 +25,9 @@
 - 未知不猜测：与其错误换算，不如返回 null
 - 不要为了让 UI 好看把 `pluggedIn` 默认成 false
 
-## 重构第 0 期
+## 仓库边界
 
-- 可以删除根目录应用代码
+- 根目录不是 Vue / uni-app 工程；车主在 `apps/owner`，管理端在 `apps/admin`，后端在 `server/`
 - 不要删除 `docs/`（本文档体系）、`LICENSE`、`.gitignore` 的 `*.har` 规则
 - `1.har` 若仍在工作区：保持忽略，不要移动到 `testdata`
 

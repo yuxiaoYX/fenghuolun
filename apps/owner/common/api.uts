@@ -410,6 +410,9 @@ export function ownerRequest(method : string, path : string, body : UTSJSONObjec
 	if (method == 'POST') {
 		return send('POST', path, body)
 	}
+	if (method == 'PUT') {
+		return send('PUT', path, body)
+	}
 	return send('GET', path, body)
 }
 

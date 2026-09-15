@@ -35,6 +35,12 @@
       "style": {
         "navigationBarTitleText": "绑定"
       }
+    },
+    {
+      "path": "pages/history/history",
+      "style": {
+        "navigationBarTitleText": "车况历史"
+      }
     }
   ],
   "globalStyle": {

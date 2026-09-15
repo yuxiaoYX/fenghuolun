@@ -11,10 +11,17 @@ import (
 const StaleAfter = 2 * time.Hour
 
 func (s Snapshot) Stale(now time.Time) bool {
+	return s.StaleSince(now, StaleAfter)
+}
+
+func (s Snapshot) StaleSince(now time.Time, d time.Duration) bool {
+	if d <= 0 {
+		d = StaleAfter
+	}
 	if s.ReportedAt == nil || s.ReportedAt.IsZero() {
 		return false
 	}
-	return now.Sub(s.ReportedAt.Time()) > StaleAfter
+	return now.Sub(s.ReportedAt.Time()) > d
 }
 
 type Snapshot struct {

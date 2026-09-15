@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gogf/gf/v2/frame/g"
 
@@ -55,6 +56,45 @@ func (c *ControllerV1) Vehicle(ctx context.Context, req *v1.VehicleReq) (res *v1
 	}, nil
 }
 
+func (c *ControllerV1) VehiclePut(ctx context.Context, req *v1.VehiclePutReq) (res *v1.VehicleRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nick := strings.TrimSpace(req.Nickname)
+	if utf8.RuneCountInString(nick) > 32 {
+		return nil, coded.New(http.StatusBadRequest, "invalid_request", "备注名最多 32 字")
+	}
+	if err := c.Svc.Store.SetNickname(b.ID, nick); err != nil {
+		return nil, err
+	}
+	nb := c.Svc.Get(sessionOf(ctx))
+	if nb == nil {
+		return nil, coded.New(http.StatusUnauthorized, "unauthorized", "请先绑定")
+	}
+	v := vehicleMap(nb)
+	return &v1.VehicleRes{
+		Nickname:   v["nickname"].(string),
+		ModelCode:  v["modelCode"].(string),
+		ModelName:  v["modelName"].(string),
+		Trim:       v["trim"].(string),
+		VinMasked:  v["vinMasked"].(string),
+		IsExtender: v["isExtender"].(bool),
+	}, nil
+}
+
+func (c *ControllerV1) Snapshots(ctx context.Context, req *v1.SnapshotsReq) (res *v1.SnapshotsRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items, total, err := c.Svc.Store.ListSnapshotSummaries(b.ID, req.Page, req.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.SnapshotsRes{Items: items, Total: total}, nil
+}
+
 func (c *ControllerV1) Snapshot(ctx context.Context, req *v1.SnapshotReq) (res *v1.SnapshotRes, err error) {
 	b, err := c.must(ctx)
 	if err != nil {
@@ -64,7 +104,7 @@ func (c *ControllerV1) Snapshot(ctx context.Context, req *v1.SnapshotReq) (res *
 		return nil, coded.New(http.StatusNotFound, "decode", "还没有快照")
 	}
 	snap := b.Snapshots[len(b.Snapshots)-1]
-	return &v1.SnapshotRes{Snapshot: snap, Stale: snap.Stale(time.Now())}, nil
+	return &v1.SnapshotRes{Snapshot: snap, Stale: snap.StaleSince(time.Now(), c.Svc.StaleAfter())}, nil
 }
 
 func (c *ControllerV1) Energy(ctx context.Context, req *v1.EnergyReq) (res *v1.EnergyRes, err error) {

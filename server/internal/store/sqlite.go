@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fenghuolun/internal/clock"
@@ -112,10 +113,21 @@ func (s *SQLite) migrate() error {
   deleted_at INTEGER DEFAULT 0
 )`,
 		`CREATE TABLE IF NOT EXISTS sync_job (
-  binding_id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY,
+  binding_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'unknown',
   status TEXT NOT NULL,
   error_public TEXT NOT NULL DEFAULT '',
-  synced_at INTEGER NOT NULL,
+  error_internal TEXT NOT NULL DEFAULT '',
+  started_at INTEGER NOT NULL DEFAULT 0,
+  finished_at INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER,
+  updated_at INTEGER,
+  deleted_at INTEGER DEFAULT 0
+)`,
+		`CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
   created_at INTEGER,
   updated_at INTEGER,
   deleted_at INTEGER DEFAULT 0
@@ -161,6 +173,7 @@ func (s *SQLite) migrate() error {
 		`ALTER TABLE admin_user ADD COLUMN deleted_at INTEGER DEFAULT 0`,
 		`ALTER TABLE admin_session ADD COLUMN updated_at INTEGER`,
 		`ALTER TABLE admin_session ADD COLUMN deleted_at INTEGER DEFAULT 0`,
+		`ALTER TABLE admin_session ADD COLUMN username TEXT NOT NULL DEFAULT ''`,
 	} {
 		_, _ = s.db.Exec(ctx, stmt)
 	}
@@ -168,9 +181,58 @@ func (s *SQLite) migrate() error {
 	_, _ = s.db.Exec(ctx, `UPDATE binding SET deleted_at = 0 WHERE deleted_at IS NULL`)
 	_, _ = s.db.Exec(ctx, `UPDATE owner_session SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0`)
 	_, _ = s.db.Exec(ctx, `UPDATE owner_session SET deleted_at = 0 WHERE deleted_at IS NULL`)
-	for _, table := range []string{"snapshot", "energy", "sync_job", "admin_user", "admin_session"} {
+	for _, table := range []string{"snapshot", "energy", "sync_job", "admin_user", "admin_session", "app_settings"} {
 		_, _ = s.db.Exec(ctx, `UPDATE `+table+` SET deleted_at = 0 WHERE deleted_at IS NULL`)
 	}
+	return s.migrateSyncJobHistory()
+}
+
+func (s *SQLite) hasColumn(table, col string) bool {
+	all, err := s.db.GetAll(s.ctx(), "PRAGMA table_info(`"+table+"`)")
+	if err != nil {
+		return false
+	}
+	for _, rec := range all {
+		if rec["name"].String() == col {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SQLite) migrateSyncJobHistory() error {
+	if s.hasColumn("sync_job", "id") {
+		_, _ = s.db.Exec(s.ctx(), `CREATE INDEX IF NOT EXISTS idx_sync_job_binding_started ON sync_job(binding_id, started_at)`)
+		return nil
+	}
+	ctx := s.ctx()
+	if _, err := s.db.Exec(ctx, `ALTER TABLE sync_job RENAME TO sync_job_v1`); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(ctx, `CREATE TABLE sync_job (
+  id TEXT PRIMARY KEY,
+  binding_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'unknown',
+  status TEXT NOT NULL,
+  error_public TEXT NOT NULL DEFAULT '',
+  error_internal TEXT NOT NULL DEFAULT '',
+  started_at INTEGER NOT NULL DEFAULT 0,
+  finished_at INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER,
+  updated_at INTEGER,
+  deleted_at INTEGER DEFAULT 0
+)`); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(ctx, `INSERT INTO sync_job (id, binding_id, kind, status, error_public, error_internal, started_at, finished_at, created_at, updated_at, deleted_at)
+SELECT lower(hex(randomblob(16))), binding_id, 'unknown', status, error_public, '', synced_at, synced_at, created_at, updated_at, IFNULL(deleted_at, 0)
+FROM sync_job_v1`); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(ctx, `DROP TABLE sync_job_v1`); err != nil {
+		return err
+	}
+	_, _ = s.db.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_sync_job_binding_started ON sync_job(binding_id, started_at)`)
 	return nil
 }
 
@@ -194,13 +256,19 @@ func (s *SQLite) Put(b *Binding) error {
 	if b.Meta.IsExtender {
 		ext = 1
 	}
+	keep := s.SnapshotKeep()
+	nick := b.Meta.Nickname
+	var existing entity.Binding
+	if err := s.db.Model("binding").Ctx(s.ctx()).Where("id", b.ID).Scan(&existing); err == nil && existing.Nickname != "" {
+		nick = existing.Nickname
+	}
 	row := do.Binding{
 		Id:            b.ID,
 		VinMasked:     b.Meta.VinMasked,
 		VinCipher:     vinC,
 		ModelCode:     b.Meta.ModelCode,
 		ModelName:     b.Meta.ModelName,
-		Nickname:      b.Meta.Nickname,
+		Nickname:      nick,
 		Trim:          b.Meta.Trim,
 		IsExtender:    ext,
 		RefreshCipher: rtC,
@@ -249,6 +317,9 @@ func (s *SQLite) Put(b *Binding) error {
 				}).Insert(); err != nil {
 					return err
 				}
+				if err := pruneSnapshots(ctx, tx, b.ID, keep); err != nil {
+					return err
+				}
 			}
 		}
 		if b.Energy.Days != nil || b.Energy.TotalKwh != nil {
@@ -268,14 +339,54 @@ func (s *SQLite) Put(b *Binding) error {
 				return err
 			}
 		}
-		_, err := tx.Model("sync_job").Ctx(ctx).Data(do.SyncJob{
-			BindingId:   b.ID,
-			Status:      b.SyncStatus,
-			ErrorPublic: b.SyncError,
-			SyncedAt:    b.SyncedAt.Unix(),
-		}).OnConflict("binding_id").Save()
+		at := b.SyncedAt.Time()
+		if at.IsZero() {
+			at = time.Now().UTC()
+		}
+		if b.JobID != "" {
+			_, err := tx.Model("sync_job").Ctx(ctx).Where("id", b.JobID).Data(do.SyncJob{
+				Status:        b.SyncStatus,
+				ErrorPublic:   b.SyncError,
+				ErrorInternal: "",
+				FinishedAt:    at.Unix(),
+			}).Update()
+			return err
+		}
+		_, err := tx.Model("sync_job").Ctx(ctx).Data(syncJobData(b.ID, b.SyncKind, b.SyncStatus, b.SyncError, at)).Insert()
 		return err
 	})
+}
+
+func syncJobData(bindingID, kind, status, publicErr string, at time.Time) do.SyncJob {
+	unix := at.Unix()
+	if kind == "" {
+		kind = "manual"
+	}
+	return do.SyncJob{
+		Id:          NewSessionID(),
+		BindingId:   bindingID,
+		Kind:        kind,
+		Status:      status,
+		ErrorPublic: publicErr,
+		StartedAt:   unix,
+		FinishedAt:  unix,
+	}
+}
+
+func pruneSnapshots(ctx context.Context, tx gdb.TX, bindingID string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	var ids []int64
+	if err := tx.Model("snapshot").Ctx(ctx).Where("binding_id", bindingID).
+		OrderDesc("fetched_at").OrderDesc("id").Fields("id").Scan(&ids); err != nil {
+		return err
+	}
+	if len(ids) <= keep {
+		return nil
+	}
+	_, err := tx.Model("snapshot").Ctx(ctx).WhereIn("id", ids[keep:]).Delete()
+	return err
 }
 
 func (s *SQLite) Get(session string) *Binding {
@@ -294,6 +405,79 @@ func (s *SQLite) GetByID(id string) *Binding {
 		return nil
 	}
 	return s.loadBinding(id, "", false)
+}
+
+func (s *SQLite) GetByIDAny(id string) *Binding {
+	if id == "" {
+		return nil
+	}
+	return s.loadBinding(id, "", true)
+}
+
+func (s *SQLite) SetNickname(id, nick string) error {
+	if id == "" {
+		return fmt.Errorf("invalid_request: missing binding id")
+	}
+	_, err := s.db.Model("binding").Ctx(s.ctx()).Where("id", id).Data(do.Binding{
+		Nickname: strings.TrimSpace(nick),
+	}).Update()
+	return err
+}
+
+type SnapshotSummary struct {
+	ID           string         `json:"id"`
+	FetchedAt    clock.Instant  `json:"fetchedAt"`
+	ReportedAt   *clock.Instant `json:"reportedAt"`
+	SocPct       *float64       `json:"socPct"`
+	EvRangeKm    *float64       `json:"evRangeKm"`
+	TotalRangeKm *float64       `json:"totalRangeKm"`
+	OdometerKm   *float64       `json:"odometerKm"`
+	ChargeStatus string         `json:"chargeStatus"`
+	Online       *bool          `json:"online"`
+	Stale        bool           `json:"stale"`
+}
+
+func (s *SQLite) ListSnapshotSummaries(bindingID string, page, pageSize int) ([]SnapshotSummary, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 20
+	}
+	ctx := s.ctx()
+	m := s.db.Model("snapshot").Ctx(ctx).Where("binding_id", bindingID)
+	total, err := m.Count()
+	if err != nil {
+		return nil, 0, err
+	}
+	var rows []entity.Snapshot
+	if err := m.OrderDesc("fetched_at").OrderDesc("id").Page(page, pageSize).Scan(&rows); err != nil {
+		return nil, 0, err
+	}
+	now := time.Now()
+	staleAfter := s.StaleAfter()
+	out := make([]SnapshotSummary, 0, len(rows))
+	for _, row := range rows {
+		var snap neta.Snapshot
+		_ = json.Unmarshal([]byte(row.Payload), &snap)
+		item := SnapshotSummary{
+			ID:           fmt.Sprintf("%d", row.Id),
+			FetchedAt:    snap.FetchedAt,
+			ReportedAt:   snap.ReportedAt,
+			SocPct:       snap.Power.SocPct,
+			EvRangeKm:    snap.Power.EvRangeKm,
+			TotalRangeKm: snap.Power.TotalRangeKm,
+			OdometerKm:   snap.OdometerKm,
+			ChargeStatus: snap.Power.ChargeStatus,
+			Online:       snap.Online,
+			Stale:        snap.StaleSince(now, staleAfter),
+		}
+		if item.FetchedAt.IsZero() && row.FetchedAt > 0 {
+			item.FetchedAt = clock.Of(time.Unix(row.FetchedAt, 0).UTC())
+		}
+		out = append(out, item)
+	}
+	return out, total, nil
 }
 
 func (s *SQLite) loadBinding(id, session string, allowDisabled bool) *Binding {
@@ -340,14 +524,23 @@ func (s *SQLite) loadBinding(id, session string, allowDisabled bool) *Binding {
 		_ = json.Unmarshal([]byte(energyRow.Payload), &b.Energy)
 	}
 	var job entity.SyncJob
-	if err := s.db.Model("sync_job").Ctx(ctx).Where("binding_id", id).Scan(&job); err == nil && job.BindingId != "" {
+	if err := s.db.Model("sync_job").Ctx(ctx).Where("binding_id", id).
+		OrderDesc("started_at").OrderDesc("created_at").Limit(1).Scan(&job); err == nil && job.BindingId != "" {
 		b.SyncStatus = job.Status
 		b.SyncError = job.ErrorPublic
-		if job.SyncedAt > 0 {
-			b.SyncedAt = clock.Of(time.Unix(job.SyncedAt, 0).UTC())
+		b.SyncKind = job.Kind
+		if unix := jobFinishedUnix(job); unix > 0 {
+			b.SyncedAt = clock.Of(time.Unix(unix, 0).UTC())
 		}
 	}
 	return b
+}
+
+func jobFinishedUnix(j entity.SyncJob) int64 {
+	if j.FinishedAt > 0 {
+		return j.FinishedAt
+	}
+	return j.StartedAt
 }
 
 func (s *SQLite) Delete(session string) {
@@ -392,16 +585,55 @@ func (s *SQLite) ListActiveIDs() ([]string, error) {
 	return ids, err
 }
 
-func (s *SQLite) MarkSync(id, status, publicErr string, at time.Time) error {
+func (s *SQLite) MarkSync(id, kind, status, publicErr string, at time.Time) error {
 	if id == "" {
 		return fmt.Errorf("invalid_request: missing binding id")
 	}
-	_, err := s.db.Model("sync_job").Ctx(s.ctx()).Data(do.SyncJob{
-		BindingId:   id,
-		Status:      status,
-		ErrorPublic: publicErr,
-		SyncedAt:    at.Unix(),
-	}).OnConflict("binding_id").Save()
+	_, err := s.db.Model("sync_job").Ctx(s.ctx()).Data(syncJobData(id, kind, status, publicErr, at)).Insert()
+	return err
+}
+
+func (s *SQLite) BeginJob(bindingID, kind string) (string, error) {
+	if bindingID == "" {
+		return "", fmt.Errorf("invalid_request: missing binding id")
+	}
+	ctx := s.ctx()
+	n, err := s.db.Model("sync_job").Ctx(ctx).Where("binding_id", bindingID).Where("status", "running").Count()
+	if err != nil {
+		return "", err
+	}
+	if n > 0 {
+		return "", fmt.Errorf("invalid_request: sync already running")
+	}
+	id := NewSessionID()
+	now := time.Now().Unix()
+	if kind == "" {
+		kind = "manual"
+	}
+	_, err = s.db.Model("sync_job").Ctx(ctx).Data(do.SyncJob{
+		Id:         id,
+		BindingId:  bindingID,
+		Kind:       kind,
+		Status:     "running",
+		StartedAt:  now,
+		FinishedAt: 0,
+	}).Insert()
+	return id, err
+}
+
+func (s *SQLite) FinishJob(id, status, publicErr, internalErr string, at time.Time) error {
+	if id == "" {
+		return fmt.Errorf("invalid_request: missing job id")
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	_, err := s.db.Model("sync_job").Ctx(s.ctx()).Where("id", id).Data(do.SyncJob{
+		Status:        status,
+		ErrorPublic:   publicErr,
+		ErrorInternal: scrubSecret(internalErr),
+		FinishedAt:    at.Unix(),
+	}).Update()
 	return err
 }
 
@@ -440,7 +672,10 @@ func (s *SQLite) ListBindings() ([]BindingRow, error) {
 	_ = s.db.Model("sync_job").Ctx(ctx).Scan(&jobs)
 	byID := map[string]entity.SyncJob{}
 	for _, j := range jobs {
-		byID[j.BindingId] = j
+		prev, ok := byID[j.BindingId]
+		if !ok || j.StartedAt > prev.StartedAt || (j.StartedAt == prev.StartedAt && j.CreatedAt > prev.CreatedAt) {
+			byID[j.BindingId] = j
+		}
 	}
 	out := make([]BindingRow, 0, len(bindings))
 	for _, row := range bindings {
@@ -456,8 +691,8 @@ func (s *SQLite) ListBindings() ([]BindingRow, error) {
 		if j, ok := byID[row.Id]; ok {
 			r.SyncStatus = j.Status
 			r.SyncError = j.ErrorPublic
-			if j.SyncedAt > 0 {
-				r.SyncedAt = clock.Of(time.Unix(j.SyncedAt, 0).UTC())
+			if unix := jobFinishedUnix(j); unix > 0 {
+				r.SyncedAt = clock.Of(time.Unix(unix, 0).UTC())
 			}
 		}
 		out = append(out, r)
@@ -501,6 +736,7 @@ func (s *SQLite) AdminLogin(username, password string) (string, error) {
 	tok := NewSessionID()
 	if _, err := s.db.Model("admin_session").Ctx(ctx).Data(do.AdminSession{
 		TokenHash: hashToken(tok),
+		Username:  username,
 	}).Insert(); err != nil {
 		return "", err
 	}

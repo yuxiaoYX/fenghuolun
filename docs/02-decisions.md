@@ -45,7 +45,7 @@
 
 ## D05 管理员后台技术 — 锁定
 
-管理员后台：Vue 3 + Vite + TypeScript，普通 Web，仅管理员可登录访问。
+管理员后台：Vue 3 + Vite + TypeScript + **antdv-next 1.5.x**，普通 Web，仅管理员可登录访问。不要 Naive UI / Element / gf-vue-admin，不要 `antdv init` 另起工程。
 
 ## D06 后端技术 — 锁定
 
@@ -62,6 +62,8 @@
 官方协议解码放在 Go 内部包（`internal/neta`），不放在浏览器、不放在 uni-app 里直连官方。
 
 默认存储：**SQLite**（单二进制自托管）。表结构保持常规 SQL，不绑死 SQLite 专有类型，以便以后加 PostgreSQL。驱动用 `github.com/gogf/gf/contrib/drivers/sqlite/v2`（pure go，无 cgo）。每张表有 `created_at` / `updated_at` / `deleted_at`（unix 秒），由 gdb 在 Insert/Update/Delete 时自动维护，禁止手写。业务时刻（`fetchedAt` / `reportedAt` / `syncedAt`）仍是独立字段，见 D15。
+
+运行时旋钮（定时同步间隔、CORS、每车快照保留条数、快照陈旧阈值）存在 `app_settings`，环境变量作缺省并在空库时写入。改 cron 必须热替换 `gcron`，不必重启进程。`HTTP_ADDR`、`SQLITE_PATH`、`TOKEN_KEK` 只在环境变量，后台改不了。
 
 ## D07 车主接入方式 — 锁定
 
@@ -124,7 +126,7 @@ HAR 中的钥匙原始数据、MQTT、证书申请不得进入开源样本，也
 
 禁止只用本机 `now` 冒充车况新鲜。拉取成功 ≠ 数据新鲜。
 
-`fetchedAt` **不是** GoFrame gdb 的 `created_at`。后者是行插入时间（本仓落库也还没走 gdb 自动时间字段）；前者是「这次从官方云拉到车况」的业务时刻，快照表按它去重、油耗差分按它划段，禁止删掉或用行生命周期字段顶替。
+`fetchedAt` **不是** GoFrame gdb 的 `created_at`。后者是行插入时间（本仓由 gdb 自动写 unix 秒）；前者是「这次从官方云拉到车况」的业务时刻，快照表按它去重、油耗差分按它划段，禁止删掉或用行生命周期字段顶替。
 
 ## D16 能耗：电和油都要，但来源不同 — 锁定
 
@@ -214,3 +216,5 @@ HAR **没有** 官方用油升数、纯电里程、增程里程。禁止把官�
 | 2026-09-11 | 快照 API 增加计算字段 stale（上报>2h）；此刻/电池显示在线；能耗不再写空的上报于 |
 | 2026-09-12 | 车主前台视觉与 IA 对齐 `docs/wireframes/hifi-v2.html`（五 Tab、座舱夜航）。车控 Tab 仅为占位，D12 仍禁止发写命令 |
 | 2026-09-14 | D01：产品名改为风火轮；仓库 / Go module / 环境变量改为 `fenghuolun` / `FENGHUOLUN_*`。「账本」仅保留为记账与历史隐喻 |
+| 2026-09-14 | D05：管理端锁定 antdv-next 1.5.x。D06：运行时设置进 `app_settings`（cron 热替换）；`sync_job` 改为追加历史。KEK / 库路径 / 监听地址仍只在环境变量 |
+| 2026-09-15 | 车主可改 `nickname`（同步不覆盖）；`GET /owner/snapshots` 看本服务历史。电价/导出仍未做 |

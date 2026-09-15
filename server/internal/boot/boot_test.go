@@ -70,6 +70,63 @@ func startOwner(t *testing.T) string {
 	return "http://127.0.0.1:" + strconv.Itoa(s.GetListenedPort())
 }
 
+func TestAdminSPA(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>admin-spa</title>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("console.log(1)"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := g.Server(guid.S())
+	s.SetDumpRouterMap(false)
+	s.SetAccessLogEnabled(false)
+	s.SetErrorLogEnabled(false)
+	Register(s, config.Config{
+		SQLitePath:    ":memory:",
+		TokenKEK:      "test-kek",
+		AdminUser:     "admin",
+		AdminPassword: "secret-pass-xx",
+		AdminDir:      dir,
+	})
+	s.SetPort(0)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Shutdown() })
+	prefix := "http://127.0.0.1:" + strconv.Itoa(s.GetListenedPort())
+	html, err := g.Client().Get(context.Background(), prefix+"/bindings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer html.Close()
+	htmlBody := html.ReadAllString()
+	if html.StatusCode != http.StatusOK || !strings.Contains(htmlBody, "admin-spa") {
+		t.Fatalf("spa %d %s", html.StatusCode, htmlBody)
+	}
+	js, err := g.Client().Get(context.Background(), prefix+"/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer js.Close()
+	jsBody := js.ReadAllString()
+	if js.StatusCode != http.StatusOK || !strings.Contains(jsBody, "console.log") {
+		t.Fatalf("asset %d %s", js.StatusCode, jsBody)
+	}
+	hz, err := g.Client().Get(context.Background(), prefix+"/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hz.Close()
+	hzBody := hz.ReadAllString()
+	if hz.StatusCode != http.StatusOK || !strings.Contains(hzBody, `"phase":"2"`) {
+		t.Fatalf("healthz %d %s", hz.StatusCode, hzBody)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	prefix := startOwner(t)
 	resp, err := g.Client().Get(context.Background(), prefix+"/healthz")
@@ -169,6 +226,24 @@ func TestOwnerBindSnapshotEnergy(t *testing.T) {
 	defer en.Close()
 	if en.StatusCode != http.StatusOK {
 		t.Fatalf("energy %d %s", en.StatusCode, en.ReadAllString())
+	}
+	hist, err := cli.Get(context.Background(), prefix+"/api/v1/owner/snapshots")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hist.Close()
+	histBody := hist.ReadAllString()
+	if hist.StatusCode != http.StatusOK || !strings.Contains(histBody, `"total"`) {
+		t.Fatalf("snapshots %d %s", hist.StatusCode, histBody)
+	}
+	put, err := cli.ContentJson().Put(context.Background(), prefix+"/api/v1/owner/vehicle", `{"nickname":"家里那辆"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer put.Close()
+	putBody := put.ReadAllString()
+	if put.StatusCode != http.StatusOK || !strings.Contains(putBody, "家里那辆") {
+		t.Fatalf("nickname %d %s", put.StatusCode, putBody)
 	}
 }
 
@@ -300,5 +375,136 @@ func TestAdminDisableBindingStopsOwnerSession(t *testing.T) {
 	defer veh.Close()
 	if veh.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("owner after disable %d %s", veh.StatusCode, veh.ReadAllString())
+	}
+}
+
+func TestAdminConsoleAPIs(t *testing.T) {
+	prefix := startOwner(t)
+	bind, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/bind", `{"refresh_token":"live-token-xxxx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bind.Close()
+	login, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/admin/login", `{"username":"admin","password":"secret-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer login.Close()
+	var adminEnv struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(login.ReadAll(), &adminEnv); err != nil {
+		t.Fatal(err)
+	}
+	admin := g.Client().SetHeader("Authorization", "Bearer "+adminEnv.Data.Session)
+	health, err := admin.Get(context.Background(), prefix+"/api/v1/admin/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer health.Close()
+	healthBody := health.ReadAllString()
+	if health.StatusCode != http.StatusOK {
+		t.Fatalf("health %d %s", health.StatusCode, healthBody)
+	}
+	if strings.Contains(healthBody, "TESTVIN") {
+		t.Fatal("health must not show VIN")
+	}
+	list, err := admin.Get(context.Background(), prefix+"/api/v1/admin/bindings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer list.Close()
+	var listEnv struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Items []struct {
+				ID string `json:"id"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(list.ReadAllString()), &listEnv); err != nil {
+		t.Fatal(err)
+	}
+	id := listEnv.Data.Items[0].ID
+	detail, err := admin.Get(context.Background(), prefix+"/api/v1/admin/bindings/"+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer detail.Close()
+	detailBody := detail.ReadAllString()
+	if detail.StatusCode != http.StatusOK {
+		t.Fatalf("detail %d %s", detail.StatusCode, detailBody)
+	}
+	if strings.Contains(detailBody, "TESTVIN0000000001") || strings.Contains(detailBody, "live-token") {
+		t.Fatal("detail must not leak VIN or token")
+	}
+	sync, err := admin.ContentJson().Post(context.Background(), prefix+"/api/v1/admin/bindings/"+id+"/sync", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sync.Close()
+	if sync.StatusCode != http.StatusOK {
+		t.Fatalf("sync %d %s", sync.StatusCode, sync.ReadAllString())
+	}
+	jobs, err := admin.Get(context.Background(), prefix+"/api/v1/admin/jobs?bindingId="+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer jobs.Close()
+	jobsBody := jobs.ReadAllString()
+	if jobs.StatusCode != http.StatusOK {
+		t.Fatalf("jobs %d %s", jobs.StatusCode, jobsBody)
+	}
+	var jobsEnv struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Total int `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(jobsBody), &jobsEnv); err != nil {
+		t.Fatal(err)
+	}
+	if jobsEnv.Data.Total < 2 {
+		t.Fatalf("job history want >=2 got %s", jobsBody)
+	}
+	table, err := admin.Get(context.Background(), prefix+"/api/v1/admin/tables/binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer table.Close()
+	tableBody := table.ReadAllString()
+	if table.StatusCode != http.StatusOK {
+		t.Fatalf("table %d %s", table.StatusCode, tableBody)
+	}
+	if strings.Contains(tableBody, `"vin_cipher"`) || strings.Contains(tableBody, "TESTVIN0000000001") {
+		t.Fatal("table must redact")
+	}
+	kick, err := admin.ContentJson().Post(context.Background(), prefix+"/api/v1/admin/bindings/"+id+"/kick", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer kick.Close()
+	if kick.StatusCode != http.StatusOK {
+		t.Fatalf("kick %d %s", kick.StatusCode, kick.ReadAllString())
+	}
+	put, err := admin.ContentJson().Put(context.Background(), prefix+"/api/v1/admin/settings", `{"cronSync":"off","corsOrigins":"http://127.0.0.1:5173","snapshotKeep":0,"staleAfterSec":7200}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer put.Close()
+	if put.StatusCode != http.StatusOK {
+		t.Fatalf("settings %d %s", put.StatusCode, put.ReadAllString())
+	}
+	acc, err := admin.Get(context.Background(), prefix+"/api/v1/admin/account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer acc.Close()
+	accBody := acc.ReadAllString()
+	if acc.StatusCode != http.StatusOK || !strings.Contains(accBody, `"username":"admin"`) {
+		t.Fatalf("account %d %s", acc.StatusCode, accBody)
 	}
 }

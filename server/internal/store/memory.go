@@ -20,6 +20,8 @@ type Binding struct {
 	Energy       neta.EnergyStat
 	SyncStatus   string
 	SyncError    string
+	SyncKind     string
+	JobID        string
 	SyncedAt     clock.Instant
 	Disabled     bool
 }

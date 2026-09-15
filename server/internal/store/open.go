@@ -19,5 +19,9 @@ func OpenFromConfig(cfg config.Config) (*SQLite, error) {
 		_ = st.Close()
 		return nil, err
 	}
+	if err := st.SeedSettings(cfg); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	return st, nil
 }

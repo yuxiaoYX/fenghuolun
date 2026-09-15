@@ -30,7 +30,12 @@ func Register(s *ghttp.Server, cfg config.Config) *ownersvc.Service {
 		panic(err)
 	}
 	svc := ownersvc.New(cfg, st)
-	s.Use(middleware.CORS(cfg.CORSOrigins))
+	s.Use(middleware.CORS(func() string {
+		if v := st.GetSetting(store.SettingCORS); v != "" {
+			return v
+		}
+		return cfg.CORSOrigins
+	}))
 	s.Group("/", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Envelope)
 		group.Bind(health.NewV1(cfg))
@@ -46,5 +51,6 @@ func Register(s *ghttp.Server, cfg config.Config) *ownersvc.Service {
 	if err := ownersvc.StartCron(context.Background(), cfg, svc); err != nil {
 		panic(err)
 	}
+	registerAdminSPA(s, cfg.AdminDir)
 	return svc
 }

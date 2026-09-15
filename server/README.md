@@ -33,14 +33,7 @@ gf gen dao
 gf gen service
 ```
 
-管理员：设置 `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` / `PASSWORD` 后
-
-```
-POST /api/v1/admin/login
-GET  /api/v1/admin/bindings
-```
-
-不用 gf-vue-admin。
+管理员：设置 `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` / `PASSWORD` 后，Web 在 `apps/admin`（antdv-next）。开发用 Vite；部署 `pnpm --dir apps/admin build` 后设 `FENGHUOLUN_ADMIN_DIR` 指向 `dist`。合同见 `docs/06-backend.md`。不用 gf-vue-admin。
 
 ## AI Skill
 

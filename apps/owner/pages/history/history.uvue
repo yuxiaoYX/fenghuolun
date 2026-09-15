@@ -1,0 +1,129 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, sessionOf, bounceIfAuthFailed, envelopeOk, envelopeData, dashNum, dashInt, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	type HistRow = {
+		id : string
+		when : string
+		soc : string
+		rangeKm : string
+		odo : string
+		stale : boolean
+	}
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const rows = ref<HistRow[]>([] as HistRow[])
+	const note = ref('')
+	const page = ref(1)
+	const total = ref(0)
+	const busy = ref(false)
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		return obj[key]
+	}
+
+	const load = async (reset : boolean) => {
+		if (sessionOf() == '') {
+			note.value = '尚未绑定'
+			rows.value = [] as HistRow[]
+			return
+		}
+		if (reset == true) {
+			page.value = 1
+			rows.value = [] as HistRow[]
+		}
+		busy.value = true
+		const res = await ownerRequest('GET', '/api/v1/owner/snapshots?page=' + page.value + '&pageSize=20', null)
+		busy.value = false
+		if (envelopeOk(res) == false) {
+			if (bounceIfAuthFailed(res) == true) {
+				return
+			}
+			note.value = '拉历史失败'
+			return
+		}
+		const d = envelopeData(res)
+		total.value = pick(d, 'total') == null ? 0 : parseInt('' + pick(d, 'total'))
+		const items = pick(d, 'items')
+		const next : HistRow[] = []
+		if (reset == false) {
+			let keep = 0
+			while (keep < rows.value.length) {
+				next.push(rows.value[keep])
+				keep = keep + 1
+			}
+		}
+		if (items != null) {
+			let i = 0
+			while (i < items.length) {
+				const row = items[i]
+				const fetched = pick(row, 'fetchedAt')
+				next.push({
+					id: '' + pick(row, 'id'),
+					when: fetched == null ? '—' : '' + fetched,
+					soc: dashInt(pick(row, 'socPct'), '%'),
+					rangeKm: dashNum(pick(row, 'evRangeKm'), ' km'),
+					odo: dashNum(pick(row, 'odometerKm'), ' km'),
+					stale: pick(row, 'stale') == true
+				})
+				i = i + 1
+			}
+		}
+		rows.value = next
+		if (next.length == 0) {
+			note.value = '还没有快照'
+		} else {
+			note.value = '本服务已存 ' + total.value + ' 笔，不含官方云里未同步的'
+		}
+	}
+
+	const more = () => {
+		page.value = page.value + 1
+		load(false)
+	}
+
+	const applyChrome = () => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	}
+
+	onLoad(() => {
+		applyChrome()
+	})
+
+	onShow(() => {
+		applyChrome()
+		load(true)
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+			<view class="pad" :style="padStyle">
+				<text class="meta">{{ note }}</text>
+				<view class="group" v-if="rows.length > 0">
+					<view v-for="(row, i) in rows" :key="row.id">
+						<view class="hair" v-if="i > 0"></view>
+						<view class="row">
+							<view class="row-main">
+								<text class="row-t">{{ row.when }}</text>
+								<text class="row-s">电量 {{ row.soc }} · 纯电 {{ row.rangeKm }} · 里程 {{ row.odo }}</text>
+							</view>
+							<text class="row-s" v-if="row.stale == true">陈旧</text>
+						</view>
+					</view>
+				</view>
+				<button class="primary" v-if="rows.length < total" :disabled="busy == true" @click="more">更早的快照</button>
+				<view class="page-end"></view>
+			</view>
+		</scroll-view>
+	</view>
+</template>

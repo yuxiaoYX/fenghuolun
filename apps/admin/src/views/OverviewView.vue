@@ -1,119 +1,59 @@
 <script setup lang="ts">
+import { App, Alert, Card, Col, Row, Spin } from 'antdv-next'
 import { onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { api, type AdminHealth } from '../api'
 
-type Row = {
-  id: string
-  vinMasked: string
-  modelCode: string
-  modelName: string
-  syncStatus: string
-  syncError: string
-  syncedAt: string | null
-  disabled: boolean
-}
-
+const { message } = App.useApp()
 const router = useRouter()
-const health = ref('检查中…')
-const rows = ref<Row[]>([])
-const note = ref('')
-const busyId = ref('')
+const loading = ref(true)
+const phase = ref('')
+const health = ref<AdminHealth | null>(null)
 
 onMounted(async () => {
-  const token = localStorage.getItem('fhl_admin') ?? ''
-  if (!token) {
-    router.replace('/login')
-    return
+  try {
+    const z = await api.healthz()
+    phase.value = `后端 ${z.status} · 分期 ${z.phase}`
+  } catch {
+    phase.value = '后端未启动（默认 http://127.0.0.1:8088）'
   }
   try {
-    const res = await fetch('/healthz')
-    const body = (await res.json()) as { ok?: boolean; data?: { status?: string; phase?: string } }
-    health.value = res.ok && body.ok
-      ? `后端 ${body.data?.status ?? 'ok'} · 分期 ${body.data?.phase ?? '?'}`
-      : `后端 HTTP ${res.status}`
-  } catch {
-    health.value = '后端未启动（默认 http://127.0.0.1:8080）'
-  }
-  try {
-    const res = await fetch('/api/v1/admin/bindings', {
-      headers: { Authorization: 'Bearer ' + token },
-    })
-    const body = (await res.json()) as { ok?: boolean; data?: { items?: Row[] } }
-    if (!body.ok) {
-      localStorage.removeItem('fhl_admin')
-      router.replace('/login')
-      return
-    }
-    rows.value = body.data?.items ?? []
-    note.value = rows.value.length === 0 ? '还没有绑定' : ''
-  } catch {
-    note.value = '拉绑定列表失败'
+    health.value = await api.health()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '拉总览失败')
+  } finally {
+    loading.value = false
   }
 })
-
-async function disableRow(id: string) {
-  const token = localStorage.getItem('fhl_admin') ?? ''
-  if (!token || !id) {
-    return
-  }
-  busyId.value = id
-  note.value = ''
-  try {
-    const res = await fetch('/api/v1/admin/bindings/' + encodeURIComponent(id) + '/disable', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    })
-    const body = (await res.json()) as { ok?: boolean; error?: { message?: string } }
-    if (!body.ok) {
-      note.value = body.error?.message ?? '停用失败'
-      return
-    }
-    rows.value = rows.value.map((r) => (r.id === id ? { ...r, disabled: true } : r))
-  } catch {
-    note.value = '停用失败'
-  } finally {
-    busyId.value = ''
-  }
-}
 </script>
 
 <template>
-  <main class="page">
-    <section class="card wide">
-      <h1>总览</h1>
-      <p class="status">{{ health }}</p>
-      <p v-if="note" class="hint">{{ note }}</p>
-      <table v-if="rows.length > 0">
-        <thead>
-          <tr>
-            <th>车型</th>
-            <th>VIN</th>
-            <th>同步</th>
-            <th>同步时间</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in rows" :key="r.id">
-            <td>{{ r.modelName }} {{ r.modelCode }}</td>
-            <td>{{ r.vinMasked }}</td>
-            <td>{{ r.syncStatus }} {{ r.syncError }}{{ r.disabled ? ' · 已停用' : '' }}</td>
-            <td>{{ r.syncedAt || '—' }}</td>
-            <td>
-              <button
-                class="row-btn"
-                type="button"
-                :disabled="r.disabled || busyId === r.id"
-                @click="disableRow(r.id)"
-              >
-                {{ r.disabled ? '已停用' : '停用' }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="hint">不展示凭证明文。停用只清本服务会话，不会向车辆下发命令。</p>
-      <RouterLink to="/login">返回登录</RouterLink>
-    </section>
-  </main>
+  <Spin :spinning="loading">
+    <Alert v-if="phase" :message="phase" type="info" show-icon style="margin-bottom: 16px" />
+    <Row v-if="health" :gutter="16">
+      <Col :xs="24" :sm="12" :md="6">
+        <Card title="绑定" hoverable style="cursor: pointer" @click="router.push('/bindings')">
+          {{ health.bindingsActive }} 启用 / {{ health.bindingsDisabled }} 停用
+        </Card>
+      </Col>
+      <Col :xs="24" :sm="12" :md="6">
+        <Card title="今日同步" hoverable style="cursor: pointer" @click="router.push('/jobs')">
+          {{ health.syncOkToday }} 成功 / {{ health.syncFailToday }} 失败
+        </Card>
+      </Col>
+      <Col :xs="24" :sm="12" :md="6">
+        <Card title="凭证失效" hoverable style="cursor: pointer" @click="router.push('/bindings?filter=auth_failed')">
+          {{ health.tokenInvalid }}
+        </Card>
+      </Col>
+      <Col :xs="24" :sm="12" :md="6">
+        <Card title="上游连续失败" hoverable style="cursor: pointer" @click="router.push('/jobs?status=upstream')">
+          {{ health.upstreamStreak }}
+        </Card>
+      </Col>
+    </Row>
+    <p v-if="health" style="margin-top: 16px; opacity: 0.7">
+      定时同步：{{ health.cronSync || '关闭' }}。点卡片进对应列表。
+    </p>
+  </Spin>
 </template>

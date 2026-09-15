@@ -8,16 +8,30 @@ import (
 	"github.com/gogf/gf/v2/os/gcron"
 
 	"fenghuolun/internal/config"
+	"fenghuolun/internal/store"
 )
 
+const cronEntry = "fenghuolun-readonly-sync"
+
 func StartCron(ctx context.Context, cfg config.Config, svc *Service) error {
-	pattern := cronPattern(cfg.CronSync)
+	raw := cfg.CronSync
+	if svc != nil && svc.Store != nil {
+		if v := svc.Store.GetSetting(store.SettingCronSync); v != "" {
+			raw = v
+		}
+	}
+	return svc.ApplyCron(ctx, raw)
+}
+
+func (s *Service) ApplyCron(ctx context.Context, raw string) error {
+	gcron.Remove(cronEntry)
+	pattern := cronPattern(raw)
 	if pattern == "" {
 		return nil
 	}
 	_, err := gcron.AddSingleton(ctx, pattern, func(ctx context.Context) {
-		svc.SyncAllActive()
-	}, "fenghuolun-readonly-sync")
+		s.SyncAllActive()
+	}, cronEntry)
 	return err
 }
 

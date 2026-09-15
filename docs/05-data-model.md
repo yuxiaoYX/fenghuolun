@@ -18,7 +18,7 @@
 | `officialVehicleId` | 官方车辆 id，**不是** VIN，也不是第三方 userId |
 | `modelCode` | 如 `EP32` |
 | `modelName` | 如 哪吒 L |
-| `displayName` | 车主可改的备注名 |
+| `displayName` / `nickname` | 车主可改的备注名（`PUT /owner/vehicle`）；同步不覆盖 |
 | `status` | `active` / `token_invalid` / `disabled` |
 | `createdAt` / `updatedAt` | |
 
@@ -65,7 +65,7 @@
 | `sourceId` | `neta` | |
 | `fetchedAt` | datetime | 本服务拉到官方数据的时刻（不是行 `created_at`） |
 | `reportedAt` | datetime \| null | 车辆上报；没有则为 null，**禁止填 fetchedAt** |
-| `stale` | bool | 仅快照 API 计算，不落库。`reportedAt` 距现在 > 2 小时为 true；无 `reportedAt` 为 false |
+| `stale` | bool | 仅快照 API 计算，不落库。`reportedAt` 距现在超过 `app_settings.stale_after_sec`（默认 7200）为 true；无 `reportedAt` 为 false |
 | `online` | boolean \| null | 官方在线状态；未知为 null，UI 不写成离线 |
 | `decodeWarning` | string[] | 如 `scale_unverified`、`sentinel_65535` |
 | `vehicle` | object | `make, model, modelCode, name`；对外 API 默认无完整 VIN |
@@ -130,7 +130,7 @@
 |---|---|
 | `id` | |
 | `bindingId` | |
-| `kind` | `manual` / `cron` |
+| `kind` | `manual` / `cron` / `admin` / `unknown`（旧行迁移） |
 | `status` | `running` / `ok` / `auth_failed` / `upstream` / `decode` |
 | `startedAt` / `finishedAt` | |
 | `errorPublic` | 可给车主看的短句 |
@@ -138,24 +138,28 @@
 
 ---
 
-## 2. 表（SQLite 一期）
+## 2. 表（SQLite）
 
-建议表名：
+实际表名（不要用文档早期的 `admin_users` / `vehicle_bindings` 那种复数建议名）：
 
-- `admin_users`
-- `vehicle_bindings`
-- `official_credentials`
-- `owner_sessions`
-- `vehicle_snapshots`
-- `official_energy_stats`
-- `sync_jobs`
+| 表 | 说明 |
+|---|---|
+| `binding` | 车辆绑定；VIN/refresh/access 密文列，对外只给脱敏与有/无 |
+| `owner_session` | 车主会话，只存 token 哈希 |
+| `snapshot` | 解码后快照 JSON，按车追加 |
+| `energy` | 官方能耗，一车一行覆盖 |
+| `sync_job` | 同步历史，主键 `id`，不是 `binding_id` |
+| `admin_user` / `admin_session` | 管理员；会话带 username |
+| `app_settings` | `cron_sync` / `cors_origins` / `snapshot_keep` / `stale_after_sec` |
+
+凭证不单独成表，加密后放在 `binding` 的 cipher 列。
 
 原则：
 
 - 每张表都有 `created_at` / `updated_at` / `deleted_at`（unix 秒）。gdb Insert/Update/Delete 自动写，查询自动带 `deleted_at=0`。解绑会话是软删。
-- `fetched_at` / `synced_at` / `loc_reported_at` 是业务时刻，不是行生命周期，仍按语义赋值
-- 快照 / 能耗 payload 与对外 JSON 的时间用北京时间 `YYYY-MM-DD HH:mm:ss`；读入仍接受旧 RFC3339
-- `official_credentials` 与 `vehicle_snapshots` 的原始包若存盘：单独 `raw_blob_enc`，默认 **不存**；需要排错时由管理员开关打开且定期删除
+- `fetched_at` / `started_at` / `finished_at` / `loc_reported_at` 是业务时刻，不是行生命周期，仍按语义赋值
+- 快照 / 能耗 payload 与对外 JSON 的时间用北京时间 `YYYY-MM-DD HH:mm:ss`；读入仍接受旧 RFC3339。管理端库表浏览同样返回墙钟字符串，不把 unix 秒丢给浏览器换算
+- 原始官方包默认 **不存**
 - 不建「轨迹点」表
 
 ---
@@ -163,6 +167,6 @@
 ## 3. 对外 JSON 原则
 
 - 车主 API：快照 + 能耗 + 绑定状态；VIN 用 `vinMasked`
-- 管理员 API：绑定列表、同步、计数；同样 `vinMasked`；无凭证字段
+- 管理员 API：绑定列表、同步、计数、脱敏表浏览；同样 `vinMasked`；无凭证字段、无完整 VIN
 - `decodeWarning` 要给前台，避免把「未换算的原始值」当已换算公里
 - 时间字段见 D22：北京时间墙钟，前台不换算

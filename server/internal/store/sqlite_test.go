@@ -2,10 +2,12 @@ package store
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"fenghuolun/internal/clock"
+	"fenghuolun/internal/config"
 	"fenghuolun/internal/neta"
 )
 
@@ -258,6 +260,37 @@ func TestSQLiteAutoRowTimes(t *testing.T) {
 	}
 }
 
+func TestSQLiteNicknamePreservedAndListed(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	b := sampleBinding()
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetNickname(b.ID, "家里那辆"); err != nil {
+		t.Fatal(err)
+	}
+	b.Meta.Nickname = "官方名"
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Get(b.Session)
+	if got == nil || got.Meta.Nickname != "家里那辆" {
+		t.Fatalf("nickname %+v", got)
+	}
+	items, total, err := s.ListSnapshotSummaries(b.ID, 1, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total < 1 || len(items) < 1 || items[0].ID == "" {
+		t.Fatalf("summaries %d %+v", total, items)
+	}
+}
+
 func TestSQLiteSoftDeleteOwnerSession(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "t.db")
 	s, err := OpenSQLite(p, "test-kek")
@@ -286,5 +319,210 @@ func TestSQLiteSoftDeleteOwnerSession(t *testing.T) {
 	}
 	if deleted.Int64() == 0 {
 		t.Fatal("deleted_at should be unix seconds after Delete")
+	}
+}
+
+func TestSQLiteBeginJobExclusiveAndFinish(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	b := sampleBinding()
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	jobID, err := s.BeginJob(b.ID, "admin")
+	if err != nil || jobID == "" {
+		t.Fatal(err)
+	}
+	if _, err := s.BeginJob(b.ID, "admin"); err == nil {
+		t.Fatal("second running job must fail")
+	}
+	if err := s.FinishJob(jobID, "ok", "", "", time.Unix(300, 0).UTC()); err != nil {
+		t.Fatal(err)
+	}
+	jobs, total, err := s.ListJobs(b.ID, "", 1, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 {
+		t.Fatalf("put + begin/finish want 2 got %d", total)
+	}
+	if jobs[0].Status != "ok" || jobs[0].Kind != "admin" {
+		t.Fatalf("latest %+v", jobs[0])
+	}
+	if _, err := s.BeginJob(b.ID, "cron"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSQLiteSyncJobHistory(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	b := sampleBinding()
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkSync(b.ID, "cron", "upstream", "官方云暂不可用", time.Unix(200, 0).UTC()); err != nil {
+		t.Fatal(err)
+	}
+	jobs, total, err := s.ListJobs(b.ID, "", 1, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 {
+		t.Fatalf("want 2 jobs got %d %+v", total, jobs)
+	}
+	if jobs[0].Status != "upstream" || jobs[0].Kind != "cron" {
+		t.Fatalf("latest %+v", jobs[0])
+	}
+	if jobs[1].Status != "ok" {
+		t.Fatalf("first %+v", jobs[1])
+	}
+	rows, err := s.ListBindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].SyncStatus != "upstream" {
+		t.Fatalf("list latest job %+v", rows)
+	}
+	if s.GetByIDAny(b.ID) == nil {
+		t.Fatal("GetByIDAny")
+	}
+}
+
+func TestSQLiteSettingsAndAdminSession(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenFromConfig(config.Config{
+		SQLitePath:    p,
+		TokenKEK:      "test-kek",
+		AdminUser:     "admin",
+		AdminPassword: "secret-pass-xx",
+		CronSync:      "15m",
+		CORSOrigins:   "http://127.0.0.1:5173",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	got := s.Settings()
+	if got.CronSync != "15m" || got.StaleAfterSec != DefaultStaleAfterSec {
+		t.Fatalf("%+v", got)
+	}
+	saved, err := s.SaveSettings(Settings{CronSync: "off", CORSOrigins: "http://127.0.0.1:5173", SnapshotKeep: 2, StaleAfterSec: 3600})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.CronSync != "off" || saved.SnapshotKeep != 2 || saved.StaleAfterSec != 3600 {
+		t.Fatalf("%+v", saved)
+	}
+	tok, err := s.AdminLogin("admin", "secret-pass-xx")
+	if err != nil || tok == "" {
+		t.Fatal(err)
+	}
+	if s.AdminUsername(tok) != "admin" {
+		t.Fatalf("username %q", s.AdminUsername(tok))
+	}
+	if err := s.AdminChangePassword(tok, "secret-pass-xx", "new-pass-xx"); err != nil {
+		t.Fatal(err)
+	}
+	s.AdminLogout(tok)
+	if s.AdminOK(tok) {
+		t.Fatal("logout should drop session")
+	}
+	if _, err := s.AdminLogin("admin", "new-pass-xx"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSQLiteChangePasswordKicksOtherSessions(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenFromConfig(config.Config{
+		SQLitePath:    p,
+		TokenKEK:      "test-kek",
+		AdminUser:     "admin",
+		AdminPassword: "secret-pass-xx",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	a, err := s.AdminLogin("admin", "secret-pass-xx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.AdminLogin("admin", "secret-pass-xx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AdminChangePassword(a, "secret-pass-xx", "new-pass-xx"); err != nil {
+		t.Fatal(err)
+	}
+	if !s.AdminOK(a) {
+		t.Fatal("current session should remain")
+	}
+	if s.AdminOK(b) {
+		t.Fatal("other sessions must be kicked")
+	}
+}
+
+func TestSQLiteTableRedaction(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	if err := s.Put(sampleBinding()); err != nil {
+		t.Fatal(err)
+	}
+	page, err := s.ListTable("binding", "", 1, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := strings.ToLower(strings.Join(keysOf(page.Items), " "))
+	if strings.Contains(raw, "cipher") && !strings.Contains(raw, "has_") {
+		t.Fatalf("must not leak cipher columns: %v", page.Items)
+	}
+	for _, row := range page.Items {
+		for k, v := range row {
+			if k == "vin_cipher" || k == "refresh_cipher" || k == "access_cipher" {
+				t.Fatalf("cipher field %s=%v", k, v)
+			}
+			if strings.Contains(fmtSprint(v), "TESTVIN0000000001") {
+				t.Fatalf("full VIN in table: %v", row)
+			}
+		}
+	}
+}
+
+func keysOf(items []map[string]any) []string {
+	out := []string{}
+	for _, item := range items {
+		for k := range item {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+func fmtSprint(v any) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.Join([]string{stringify(v)}, ""), "\x00", ""))
+}
+
+func stringify(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	default:
+		return ""
 	}
 }

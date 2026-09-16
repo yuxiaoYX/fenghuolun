@@ -121,8 +121,25 @@
 | `fuelPctFrom` / `fuelPctTo` | |
 | `fuelPctDelta` | 下降为耗油，上升为加油 |
 | `kind` | `burn` / `refuel` / `flat` / `unknown` |
-| `litersEst` | 油箱容积未对照则为 null，只展示百分点 |
+| `litersEst` | 官方容积未对照则为 null |
 | `extenderOn` | 该时段是否见过增程开启/发电 |
+
+### 1.6c FillEvent 充电 / 加油
+
+按次记录。**不是**官方账单。耗油差分仍在用量里，不进花费列表。
+
+| 字段 | 说明 |
+|---|---|
+| `kind` | `charge` / `refuel` |
+| `source` | `auto` / `manual` |
+| `status` | `draft`（待补花费）/ `recorded`（有实付） |
+| 电量/油量/里程 | 快照预填，可改 |
+| `energyKwh` / `liters` | 用户填的度数或升数，可选 |
+| `paidCny` | 实付；有才入账 |
+| `unitCny` | 计算：实付/度 或 实付/升 |
+| `spend` / `capacity` | 能耗 API 计算。容量用填了度数且 SOC 差≥5% 的充电取中位数 |
+
+充电自动草稿必须 SOC 上升≥2% 且插枪或充电状态。枚举未对照前充电请手补。
 
 ### 1.7 SyncJob 同步任务
 
@@ -151,6 +168,7 @@
 | `sync_job` | 同步历史，主键 `id`，不是 `binding_id` |
 | `admin_user` / `admin_session` | 管理员；会话带 username |
 | `app_settings` | `cron_sync` / `cors_origins` / `snapshot_keep` / `stale_after_sec` |
+| `fill_event` | 充电/加油按次记录 |
 
 凭证不单独成表，加密后放在 `binding` 的 cipher 列。
 

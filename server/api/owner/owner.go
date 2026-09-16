@@ -15,6 +15,11 @@ type IOwnerV1 interface {
 	Snapshot(ctx context.Context, req *v1.SnapshotReq) (res *v1.SnapshotRes, err error)
 	Snapshots(ctx context.Context, req *v1.SnapshotsReq) (res *v1.SnapshotsRes, err error)
 	Energy(ctx context.Context, req *v1.EnergyReq) (res *v1.EnergyRes, err error)
+	Fills(ctx context.Context, req *v1.FillsReq) (res *v1.FillsRes, err error)
+	FillGet(ctx context.Context, req *v1.FillGetReq) (res *v1.FillRes, err error)
+	FillPost(ctx context.Context, req *v1.FillPostReq) (res *v1.FillRes, err error)
+	FillPut(ctx context.Context, req *v1.FillPutReq) (res *v1.FillRes, err error)
+	FillDelete(ctx context.Context, req *v1.FillDeleteReq) (res *v1.FillDeleteRes, err error)
 	Sync(ctx context.Context, req *v1.SyncReq) (res *v1.SyncRes, err error)
 	SyncLatest(ctx context.Context, req *v1.SyncLatestReq) (res *v1.SyncRes, err error)
 }

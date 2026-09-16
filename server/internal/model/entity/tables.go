@@ -62,6 +62,31 @@ type SyncJob struct {
 	DeletedAt     int64
 }
 
+type FillEvent struct {
+	Id          string
+	BindingId   string
+	Kind        string
+	Source      string
+	Status      string
+	FromFetched int64
+	ToFetched   int64
+	StartedAt   int64
+	FinishedAt  int64
+	OdoStart    *float64
+	OdoEnd      *float64
+	SocStart    *float64
+	SocEnd      *float64
+	FuelStart   *float64
+	FuelEnd     *float64
+	EnergyKwh   *float64
+	Liters      *float64
+	PaidCny     *float64
+	Note        string
+	CreatedAt   int64
+	UpdatedAt   int64
+	DeletedAt   int64
+}
+
 type AppSetting struct {
 	Key       string
 	Value     string

@@ -75,9 +75,51 @@ type EnergyReq struct {
 }
 
 type EnergyRes struct {
-	Official neta.EnergyStat  `json:"official"`
-	Fuel     []neta.FuelDelta `json:"fuel"`
-	Note     string           `json:"note"`
+	Official neta.EnergyStat   `json:"official"`
+	Fuel     []neta.FuelDelta  `json:"fuel"`
+	Fills    []neta.Fill       `json:"fills"`
+	Spend    neta.FillSpend    `json:"spend"`
+	Capacity neta.PackCapacity `json:"capacity"`
+	Note     string            `json:"note"`
+}
+
+type FillsReq struct {
+	g.Meta `path:"/fills" method:"get" tags:"Owner"`
+}
+
+type FillsRes struct {
+	Items    []neta.Fill       `json:"items"`
+	Spend    neta.FillSpend    `json:"spend"`
+	Capacity neta.PackCapacity `json:"capacity"`
+}
+
+type FillGetReq struct {
+	g.Meta `path:"/fills/{id}" method:"get" tags:"Owner"`
+	ID     string `p:"id"`
+}
+
+type FillPostReq struct {
+	g.Meta `path:"/fills" method:"post" tags:"Owner"`
+	neta.Fill
+}
+
+type FillPutReq struct {
+	g.Meta `path:"/fills/{id}" method:"put" tags:"Owner"`
+	ID     string `p:"id"`
+	neta.Fill
+}
+
+type FillRes struct {
+	neta.Fill
+}
+
+type FillDeleteReq struct {
+	g.Meta `path:"/fills/{id}" method:"delete" tags:"Owner"`
+	ID     string `p:"id"`
+}
+
+type FillDeleteRes struct {
+	Deleted bool `json:"deleted"`
 }
 
 type SyncReq struct {

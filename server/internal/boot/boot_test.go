@@ -236,6 +236,24 @@ func TestOwnerBindSnapshotEnergy(t *testing.T) {
 	if hist.StatusCode != http.StatusOK || !strings.Contains(histBody, `"total"`) {
 		t.Fatalf("snapshots %d %s", hist.StatusCode, histBody)
 	}
+	fill, err := cli.ContentJson().Post(context.Background(), prefix+"/api/v1/owner/fills", `{"kind":"charge","paidCny":48,"energyKwh":80,"socStart":10,"socEnd":90}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fill.Close()
+	fillBody := fill.ReadAllString()
+	if fill.StatusCode != http.StatusOK || !strings.Contains(fillBody, "recorded") {
+		t.Fatalf("fill %d %s", fill.StatusCode, fillBody)
+	}
+	en2, err := cli.Get(context.Background(), prefix+"/api/v1/owner/energy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer en2.Close()
+	en2Body := en2.ReadAllString()
+	if en2.StatusCode != http.StatusOK || !strings.Contains(en2Body, "chargePaidCny") || !strings.Contains(en2Body, `"kwh"`) {
+		t.Fatalf("energy spend %d %s", en2.StatusCode, en2Body)
+	}
 	put, err := cli.ContentJson().Put(context.Background(), prefix+"/api/v1/owner/vehicle", `{"nickname":"家里那辆"}`)
 	if err != nil {
 		t.Fatal(err)

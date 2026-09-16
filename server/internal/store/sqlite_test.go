@@ -260,6 +260,47 @@ func TestSQLiteAutoRowTimes(t *testing.T) {
 	}
 }
 
+func TestSQLiteFillDetectAndPay(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	yes := true
+	b := sampleBinding()
+	b.Snapshots = []neta.Snapshot{
+		{FetchedAt: clock.Of(time.Unix(1, 0).UTC()), Power: neta.Power{SocPct: ptrf(40), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
+	}
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	b.Snapshots = []neta.Snapshot{
+		{FetchedAt: clock.Of(time.Unix(2, 0).UTC()), Power: neta.Power{SocPct: ptrf(80), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
+	}
+	if err := s.Put(b); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.ListFills(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Kind != neta.FillCharge || items[0].Status != neta.FillDraft {
+		t.Fatalf("%+v", items)
+	}
+	paid := 40.0
+	kwh := 32.0
+	saved, err := s.SaveFill(b.ID, neta.Fill{ID: items[0].ID, Kind: neta.FillCharge, PaidCny: &paid, EnergyKwh: &kwh, SocStart: items[0].SocStart, SocEnd: items[0].SocEnd})
+	if err != nil || saved.Status != neta.FillRecorded || saved.UnitCny == nil {
+		t.Fatalf("%+v %v", saved, err)
+	}
+	if _, err := s.SaveFill(b.ID, neta.Fill{Kind: neta.FillRefuel, PaidCny: ptrf(200), Liters: ptrf(30)}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func ptrf(v float64) *float64 { return &v }
+
 func TestSQLiteNicknamePreservedAndListed(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "t.db")
 	s, err := OpenSQLite(p, "test-kek")

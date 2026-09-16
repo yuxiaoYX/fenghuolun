@@ -10,6 +10,8 @@
 <style>
 	.page-wrap {
 		flex: 1;
+		flex-direction: column;
+		overflow: hidden;
 		--fhl-bg: #EEF2F6;
 		--fhl-pan: #FFFFFF;
 		--fhl-pan2: #F5F8FB;
@@ -922,15 +924,16 @@
 		color: var(--fhl-mut);
 	}
 	.fab {
-		position: absolute;
+		position: fixed;
 		right: 16px;
-		bottom: 16px;
+		bottom: 72px;
 		width: 54px;
 		height: 54px;
 		border-radius: 17px;
 		background-color: var(--fhl-brand);
 		align-items: center;
 		justify-content: center;
+		z-index: 999;
 	}
 	.fab-txt {
 		font-size: 28px;

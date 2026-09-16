@@ -13,6 +13,8 @@
 	const stale = ref(false)
 	const currentA = ref('—')
 	const v12Warn = ref(false)
+	const capKwh = ref('—')
+	const capNote = ref('有充电记录并填了度数才反推。')
 
 	const pick = (obj, key) => {
 		if (obj == null) {
@@ -47,6 +49,14 @@
 		freshText.value = snapshotFreshLine(d)
 		stale.value = snapshotStale(d)
 		note.value = '电流编码未对照则保持 —。SOH 无证据。'
+		const fills = await ownerRequest('GET', '/api/v1/owner/fills', null)
+		if (envelopeOk(fills) == true) {
+			const cap = pick(envelopeData(fills), 'capacity')
+			capKwh.value = dashNum(pick(cap, 'kwh'), '')
+			if (pick(cap, 'note') != null) {
+				capNote.value = '' + pick(cap, 'note')
+			}
+		}
 	}
 
 	const applyChrome = () => {
@@ -78,9 +88,10 @@
 				<view class="tile-accent"></view>
 				<text class="k">满电容量估算 · 由充电记录反推</text>
 				<view class="big-row">
-					<text class="tile-v">—</text>
+					<text class="tile-v">{{ capKwh }}</text>
+					<text class="unit" v-if="capKwh != '—'"> kWh</text>
 				</view>
-				<text class="tile-p">没有充电账单接口，不算容量，也不填标称 kWh。</text>
+				<text class="tile-p">{{ capNote }}</text>
 			</view>
 
 			<view class="tile" style="margin-bottom: 10px;">

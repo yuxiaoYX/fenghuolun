@@ -62,6 +62,10 @@ func WriteBiz(r *ghttp.Request, err error) {
 			public = "没有这张表"
 		case strings.Contains(msg, "nickname"):
 			public = "备注名最多 32 字"
+		case strings.Contains(msg, "ledger"):
+			public = "记账数字不在合理范围"
+		case strings.Contains(msg, "fill"):
+			public = "充能记录数字不在合理范围"
 		}
 		WriteErr(r, http.StatusBadRequest, "invalid_request", public)
 	case strings.HasPrefix(msg, "unauthorized"):

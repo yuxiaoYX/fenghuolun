@@ -81,7 +81,10 @@
 | `PUT` | `/api/v1/owner/vehicle` | `{ "nickname" }`，最多 32 字；同步不覆盖车主备注 |
 | `GET` | `/api/v1/owner/snapshot/latest` | 最新解码快照；另带计算字段 `stale`（上报超过 `stale_after_sec`，默认 7200） |
 | `GET` | `/api/v1/owner/snapshots` | 本服务快照摘要分页；无完整 VIN |
-| `GET` | `/api/v1/owner/energy?type=1` | 官方能耗；type 同官方 1/2/3 |
+| `GET` | `/api/v1/owner/energy?type=1` | 官方能耗、油量差分、充能记录、实付合计、容量反推 |
+| `GET` | `/api/v1/owner/fills` | 充电/加油列表 |
+| `POST` | `/api/v1/owner/fills` | 手补一条 |
+| `GET/PUT/DELETE` | `/api/v1/owner/fills/{id}` | 看 / 补实付 / 删 |
 | `POST` | `/api/v1/owner/sync` | 手动同步 |
 | `GET` | `/api/v1/owner/sync/latest` | 最近一次任务状态 |
 

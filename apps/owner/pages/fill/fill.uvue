@@ -1,0 +1,272 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, sessionOf, bounceIfAuthFailed, envelopeOk, envelopeData, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const id = ref('')
+	const kind = ref('charge')
+	const paid = ref('')
+	const qty = ref('')
+	const socStart = ref('')
+	const socEnd = ref('')
+	const fuelStart = ref('')
+	const fuelEnd = ref('')
+	const odoEnd = ref('')
+	const note = ref('')
+	const hint = ref('')
+	const whenTxt = ref('')
+	const unitTxt = ref('')
+	const err = ref('')
+	const busy = ref(false)
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		return obj[key]
+	}
+
+	const numTxt = (v) => {
+		if (v == null) {
+			return ''
+		}
+		return '' + v
+	}
+
+	const parseNum = (raw : string) => {
+		const t = raw.trim()
+		if (t == '') {
+			return null
+		}
+		const n = parseFloat(t)
+		if (n != n) {
+			return null
+		}
+		return n
+	}
+
+	const applyFill = (d) => {
+		kind.value = pick(d, 'kind') == 'refuel' ? 'refuel' : 'charge'
+		paid.value = numTxt(pick(d, 'paidCny'))
+		if (kind.value == 'charge') {
+			qty.value = numTxt(pick(d, 'energyKwh'))
+		} else {
+			qty.value = numTxt(pick(d, 'liters'))
+		}
+		socStart.value = numTxt(pick(d, 'socStart'))
+		socEnd.value = numTxt(pick(d, 'socEnd'))
+		fuelStart.value = numTxt(pick(d, 'fuelStart'))
+		fuelEnd.value = numTxt(pick(d, 'fuelEnd'))
+		odoEnd.value = numTxt(pick(d, 'odoEnd'))
+		note.value = pick(d, 'note') == null ? '' : '' + pick(d, 'note')
+		const finished = pick(d, 'finishedAt')
+		whenTxt.value = finished == null ? '' : '' + finished
+		const unit = pick(d, 'unitCny')
+		if (unit != null) {
+			unitTxt.value = kind.value == 'refuel' ? '折合 ' + unit + ' 元/升' : '折合 ' + unit + ' 元/度'
+		} else {
+			unitTxt.value = ''
+		}
+		const st = pick(d, 'status')
+		if (st == 'draft') {
+			hint.value = '待补花费。预填来自快照，可改。'
+		} else {
+			hint.value = '已记账。改实付后保存。'
+		}
+		setTitle()
+	}
+
+	const setTitle = () => {
+		uni.setNavigationBarTitle({
+			title: kind.value == 'refuel' ? '加油' : '充电'
+		})
+	}
+
+	const prefillLatest = async () => {
+		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
+		if (envelopeOk(res) == false) {
+			return
+		}
+		const d = envelopeData(res)
+		const soc = numTxt(pick(pick(d, 'power'), 'socPct'))
+		const fuel = numTxt(pick(pick(d, 'extender'), 'fuelPct'))
+		odoEnd.value = numTxt(pick(d, 'odometerKm'))
+		socEnd.value = soc
+		fuelEnd.value = fuel
+		if (kind.value == 'charge') {
+			hint.value = '手补充电。电量来自最新快照，可改。实付才入账。'
+		} else {
+			hint.value = '手补加油。油量来自最新快照，可改。实付才入账。'
+		}
+		setTitle()
+	}
+
+	const load = async () => {
+		err.value = ''
+		if (sessionOf() == '') {
+			err.value = '尚未绑定'
+			return
+		}
+		if (id.value != '') {
+			const res = await ownerRequest('GET', '/api/v1/owner/fills/' + id.value, null)
+			if (envelopeOk(res) == false) {
+				if (bounceIfAuthFailed(res) == true) {
+					return
+				}
+				err.value = '没有这条记录'
+				return
+			}
+			applyFill(envelopeData(res))
+			return
+		}
+		await prefillLatest()
+	}
+
+	const save = async () => {
+		err.value = ''
+		const p = parseNum(paid.value)
+		const q = parseNum(qty.value)
+		if (paid.value.trim() != '' && p == null) {
+			err.value = '实付请填数字'
+			return
+		}
+		if (qty.value.trim() != '' && q == null) {
+			err.value = kind.value == 'charge' ? '电量请填数字' : '升数请填数字'
+			return
+		}
+		const body : UTSJSONObject = {
+			kind: kind.value,
+			paidCny: p,
+			odoEnd: parseNum(odoEnd.value),
+			note: note.value
+		}
+		if (kind.value == 'charge') {
+			body['energyKwh'] = q
+			body['socStart'] = parseNum(socStart.value)
+			body['socEnd'] = parseNum(socEnd.value)
+			body['fuelEnd'] = parseNum(fuelEnd.value)
+		} else {
+			body['liters'] = q
+			body['fuelStart'] = parseNum(fuelStart.value)
+			body['fuelEnd'] = parseNum(fuelEnd.value)
+			body['socEnd'] = parseNum(socEnd.value)
+		}
+		busy.value = true
+		let res : UTSJSONObject | null = null
+		if (id.value == '') {
+			res = await ownerRequest('POST', '/api/v1/owner/fills', body)
+		} else {
+			res = await ownerRequest('PUT', '/api/v1/owner/fills/' + id.value, body)
+		}
+		busy.value = false
+		if (envelopeOk(res) == true) {
+			uni.navigateBack({})
+			return
+		}
+		if (bounceIfAuthFailed(res) == true) {
+			return
+		}
+		err.value = '没存上。实付和数字请填合理范围。'
+	}
+
+	const setKind = (k : string) => {
+		kind.value = k
+		unitTxt.value = ''
+		setTitle()
+		if (k == 'charge') {
+			hint.value = '充电：填实付和起止电量。度数可选，用来算单价和容量。'
+		} else {
+			hint.value = '加油：填实付和加油前后油量。升数可选，用来算单价。'
+		}
+	}
+
+	const drop = async () => {
+		if (id.value == '') {
+			uni.navigateBack({})
+			return
+		}
+		busy.value = true
+		const res = await ownerRequest('DELETE', '/api/v1/owner/fills/' + id.value, null)
+		busy.value = false
+		if (envelopeOk(res) == true || bounceIfAuthFailed(res) == true) {
+			uni.navigateBack({})
+			return
+		}
+		err.value = '没删掉'
+	}
+
+	onLoad((q) => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+		if (q != null && q['id'] != null && q['id'] != '') {
+			id.value = '' + q['id']
+		}
+		if (q != null && q['kind'] == 'refuel') {
+			kind.value = 'refuel'
+		}
+		setTitle()
+		load()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+			<view class="pad" :style="padStyle">
+				<text class="meta">{{ hint }}</text>
+				<text class="note" v-if="whenTxt.length > 0">{{ whenTxt }}</text>
+				<view class="theme-row">
+					<view class="theme-pill" :class="kind == 'charge' ? 'theme-pill-on' : ''" @click="setKind('charge')">
+						<text class="theme-pill-txt" :class="kind == 'charge' ? 'theme-pill-on-txt' : ''">充电</text>
+					</view>
+					<view class="theme-gap"></view>
+					<view class="theme-pill" :class="kind == 'refuel' ? 'theme-pill-on' : ''" @click="setKind('refuel')">
+						<text class="theme-pill-txt" :class="kind == 'refuel' ? 'theme-pill-on-txt' : ''">加油</text>
+					</view>
+				</view>
+
+				<text class="field">当前总里程（公里）</text>
+				<input class="input" style="min-height:44px" v-model="odoEnd" placeholder="快照预填，可改" />
+
+				<view v-if="kind == 'charge'">
+					<text class="field">充电金额（元）</text>
+					<input class="input" style="min-height:44px" v-model="paid" placeholder="这次实付。空着只当草稿" />
+					<text class="field">充电电量（度）</text>
+					<input class="input" style="min-height:44px" v-model="qty" placeholder="枪上的度数。不填不算单价和容量" />
+					<text class="note" v-if="unitTxt.length > 0">{{ unitTxt }}</text>
+					<text class="field">开始充电时电量 %</text>
+					<input class="input" style="min-height:44px" v-model="socStart" placeholder="可改" />
+					<text class="field">结束充电时电量 %</text>
+					<input class="input" style="min-height:44px" v-model="socEnd" placeholder="可改" />
+					<text class="field">当时油量 %</text>
+					<input class="input" style="min-height:44px" v-model="fuelEnd" placeholder="可改" />
+				</view>
+
+				<view v-if="kind == 'refuel'">
+					<text class="field">实付金额（元）</text>
+					<input class="input" style="min-height:44px" v-model="paid" placeholder="这次实付。空着只当草稿" />
+					<text class="field">加油量（升）</text>
+					<input class="input" style="min-height:44px" v-model="qty" placeholder="机显升数。不填不算单价" />
+					<text class="note" v-if="unitTxt.length > 0">{{ unitTxt }}</text>
+					<text class="field">加油前油量 %</text>
+					<input class="input" style="min-height:44px" v-model="fuelStart" placeholder="可改" />
+					<text class="field">加油后油量 %</text>
+					<input class="input" style="min-height:44px" v-model="fuelEnd" placeholder="可改" />
+					<text class="field">当时电量 %</text>
+					<input class="input" style="min-height:44px" v-model="socEnd" placeholder="可改" />
+				</view>
+
+				<text class="field">备注</text>
+				<input class="input" style="min-height:44px" v-model="note" placeholder="可选" />
+				<button class="primary" :disabled="busy == true" @click="save">保存</button>
+				<button class="ghost" :disabled="busy == true" @click="drop">{{ id == '' ? '取消' : '删除' }}</button>
+				<text class="err" v-if="err.length > 0">{{ err }}</text>
+				<view class="page-end"></view>
+			</view>
+		</scroll-view>
+	</view>
+</template>

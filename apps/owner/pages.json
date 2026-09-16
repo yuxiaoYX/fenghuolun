@@ -41,6 +41,12 @@
       "style": {
         "navigationBarTitleText": "车况历史"
       }
+    },
+    {
+      "path": "pages/fill/fill",
+      "style": {
+        "navigationBarTitleText": "充电 / 加油"
+      }
     }
   ],
   "globalStyle": {

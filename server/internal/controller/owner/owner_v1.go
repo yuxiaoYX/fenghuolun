@@ -112,11 +112,89 @@ func (c *ControllerV1) Energy(ctx context.Context, req *v1.EnergyReq) (res *v1.E
 	if err != nil {
 		return nil, err
 	}
+	fills, err := c.Svc.Store.ListFills(b.ID)
+	if err != nil {
+		return nil, err
+	}
 	return &v1.EnergyRes{
 		Official: b.Energy,
 		Fuel:     neta.FuelLedger(b.Snapshots),
-		Note:     "电来自官方 kWh；油来自快照油量差分。",
+		Fills:    fills,
+		Spend:    neta.FillSpendOf(fills, b.Energy.TotalKwh),
+		Capacity: neta.PackCapacityOf(fills),
+		Note:     "电来自官方 kWh；油来自快照油量差分。花费只计充电/加油实付。自动充电草稿需要已解码的插枪或充电状态。",
 	}, nil
+}
+
+func (c *ControllerV1) Fills(ctx context.Context, req *v1.FillsReq) (res *v1.FillsRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fills, err := c.Svc.Store.ListFills(b.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.FillsRes{
+		Items:    fills,
+		Spend:    neta.FillSpendOf(fills, b.Energy.TotalKwh),
+		Capacity: neta.PackCapacityOf(fills),
+	}, nil
+}
+
+func (c *ControllerV1) FillGet(ctx context.Context, req *v1.FillGetReq) (res *v1.FillRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	f := c.Svc.Store.GetFill(b.ID, req.ID)
+	if f == nil {
+		return nil, coded.New(http.StatusNotFound, "not_found", "没有这条充能记录")
+	}
+	return &v1.FillRes{Fill: *f}, nil
+}
+
+func (c *ControllerV1) FillPost(ctx context.Context, req *v1.FillPostReq) (res *v1.FillRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := req.Fill
+	in.ID = ""
+	in.Source = neta.FillManual
+	saved, err := c.Svc.Store.SaveFill(b.ID, in)
+	if err != nil {
+		return nil, coded.New(http.StatusBadRequest, "invalid_request", "充能记录数字不在合理范围")
+	}
+	return &v1.FillRes{Fill: saved}, nil
+}
+
+func (c *ControllerV1) FillPut(ctx context.Context, req *v1.FillPutReq) (res *v1.FillRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	in := req.Fill
+	in.ID = req.ID
+	saved, err := c.Svc.Store.SaveFill(b.ID, in)
+	if err != nil {
+		if err.Error() == "not_found" {
+			return nil, coded.New(http.StatusNotFound, "not_found", "没有这条充能记录")
+		}
+		return nil, coded.New(http.StatusBadRequest, "invalid_request", "充能记录数字不在合理范围")
+	}
+	return &v1.FillRes{Fill: saved}, nil
+}
+
+func (c *ControllerV1) FillDelete(ctx context.Context, req *v1.FillDeleteReq) (res *v1.FillDeleteRes, err error) {
+	b, err := c.must(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Svc.Store.DeleteFill(b.ID, req.ID); err != nil {
+		return nil, coded.New(http.StatusNotFound, "not_found", "没有这条充能记录")
+	}
+	return &v1.FillDeleteRes{Deleted: true}, nil
 }
 
 func (c *ControllerV1) Sync(ctx context.Context, req *v1.SyncReq) (res *v1.SyncRes, err error) {

@@ -83,6 +83,13 @@ export function dashFixed1(v : number | null, suffix : string) : string {
 	return v.toFixed(1) + suffix
 }
 
+export function dashYuan(v : number | null) : string {
+	if (v == null) {
+		return '—'
+	}
+	return '约 ¥' + v.toFixed(2)
+}
+
 export function dashCoord(v : number | null) : string {
 	if (v == null) {
 		return '—'
@@ -149,7 +156,16 @@ export function contentPadBottom(tabPage : boolean) : number {
 }
 
 export function fabOffset() : number {
-	return 16
+	const info = uni.getWindowInfo()
+	let bottom = 16 + 56
+	if (info.safeAreaInsets != null && info.safeAreaInsets.bottom > 0) {
+		bottom = bottom + info.safeAreaInsets.bottom
+	}
+	return bottom
+}
+
+export function fabStyle() : string {
+	return 'position:fixed;right:16px;bottom:' + fabOffset().toString() + 'px;width:54px;height:54px;z-index:999;'
 }
 
 export function padBoxStyle(tabPage : boolean) : string {
@@ -178,7 +194,7 @@ export function pageWrapStyle() : string {
 	if (h < 400) {
 		h = 400
 	}
-	return 'flex:1;min-height:' + h.toString() + 'px;background-color:' + bg
+	return 'flex:1;height:' + h.toString() + 'px;overflow:hidden;position:relative;background-color:' + bg
 }
 
 export function themeClassOf() : string {
@@ -412,6 +428,9 @@ export function ownerRequest(method : string, path : string, body : UTSJSONObjec
 	}
 	if (method == 'PUT') {
 		return send('PUT', path, body)
+	}
+	if (method == 'DELETE') {
+		return send('DELETE', path, body)
 	}
 	return send('GET', path, body)
 }

@@ -14,7 +14,7 @@ const total = ref(0)
 const note = ref('')
 const page = ref(1)
 
-const needsBinding = computed(() => ['snapshot', 'energy', 'sync_job', 'owner_session'].includes(name.value))
+const needsBinding = computed(() => ['snapshot', 'energy', 'sync_job', 'owner_session', 'fill_event'].includes(name.value))
 
 const columns = computed(() => {
   const first = items.value[0]

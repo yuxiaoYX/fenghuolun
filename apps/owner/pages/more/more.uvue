@@ -68,6 +68,12 @@
 		})
 	}
 
+	const goEnergy = () => {
+		uni.switchTab({
+			url: '/pages/energy/energy'
+		})
+	}
+
 	const goHistory = () => {
 		if (bound.value == false) {
 			goBind()
@@ -202,18 +208,10 @@
 
 			<text class="sec-title">记账</text>
 			<view class="group">
-				<view class="row" @click="notOpen">
+				<view class="row" @click="goEnergy">
 					<view class="row-main">
-						<text class="row-t">电价 · 峰谷时段</text>
-						<text class="row-s">尚未开通</text>
-					</view>
-					<text class="row-chev">›</text>
-				</view>
-				<view class="hair"></view>
-				<view class="row" @click="notOpen">
-					<view class="row-main">
-						<text class="row-t">油价 · 油箱容积</text>
-						<text class="row-s">容积对照后才换算升</text>
+						<text class="row-t">充电 / 加油花费</text>
+						<text class="row-s">按次实付，不是官方账单</text>
 					</view>
 					<text class="row-chev">›</text>
 				</view>

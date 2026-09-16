@@ -279,6 +279,7 @@ func (s *SQLite) TableNames() []map[string]any {
 		{"name": "admin_user", "label": "管理员"},
 		{"name": "admin_session", "label": "管理员会话"},
 		{"name": "app_settings", "label": "运行时设置"},
+		{"name": "fill_event", "label": "充能记录"},
 	}
 }
 
@@ -425,6 +426,29 @@ func (s *SQLite) ListTable(name, bindingID string, page, pageSize int) (*TablePa
 			})
 		}
 		return &TablePage{Name: name, Total: total, Items: items, Note: "不返回 token 哈希"}, nil
+	case "fill_event":
+		if bindingID != "" {
+			m = m.Where("binding_id", bindingID)
+		}
+		total, err := m.Count()
+		if err != nil {
+			return nil, err
+		}
+		var rows []entity.FillEvent
+		if err := m.OrderDesc("finished_at").Page(page, pageSize).Scan(&rows); err != nil {
+			return nil, err
+		}
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			items = append(items, map[string]any{
+				"id": r.Id, "binding_id": r.BindingId, "kind": r.Kind, "source": r.Source, "status": r.Status,
+				"started_at": wallTime(r.StartedAt), "finished_at": wallTime(r.FinishedAt),
+				"soc_start": r.SocStart, "soc_end": r.SocEnd, "fuel_start": r.FuelStart, "fuel_end": r.FuelEnd,
+				"energy_kwh": r.EnergyKwh, "liters": r.Liters, "paid_cny": r.PaidCny, "note": r.Note,
+				"created_at": wallTime(r.CreatedAt), "updated_at": wallTime(r.UpdatedAt), "deleted_at": wallTime(r.DeletedAt),
+			})
+		}
+		return &TablePage{Name: name, Total: total, Items: items, Note: "充电/加油按次记录。实付才入账，不是官方账单。"}, nil
 	case "app_settings":
 		total, err := m.Count()
 		if err != nil {

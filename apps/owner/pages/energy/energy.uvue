@@ -1,23 +1,28 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, dashNum, timeLine, bounceIfAuthFailed, envelopeOk, envelopeData, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome, fabOffset } from '../../common/api.uts'
+	import { ownerRequest, sessionOf, dashNum, dashYuan, timeLine, bounceIfAuthFailed, envelopeOk, envelopeData, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome, fabStyle } from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
 	const infoIcon = ref(navIcon('info'))
-	const fabBottom = ref(72)
+	const fabBox = ref(fabStyle())
+
 	const weekKwh = ref('—')
 	const fuelDelta = ref('—')
 	const fuelNote = ref('需要至少两笔快照才能记油')
 	const acShare = ref('—')
 	const note = ref('')
 	const freshText = ref('尚未绑定')
+	const elecCost = ref('—')
+	const oilCost = ref('—')
+	const weekCost = ref('官方按日 kWh 合计')
 	type EnergyBar = {
 		h : number
 		on : boolean
 	}
-	type FuelRec = {
+	type FillRec = {
+		id : string
 		title : string
 		amt : string
 		oil : boolean
@@ -26,10 +31,10 @@
 	}
 	const eleBars = ref<EnergyBar[]>([] as EnergyBar[])
 	const oilBars = ref<EnergyBar[]>([] as EnergyBar[])
-	const fuelRecs = ref<FuelRec[]>([] as FuelRec[])
+	const fillRecs = ref<FillRec[]>([] as FillRec[])
 	const hasEleChart = ref(false)
 	const hasOilChart = ref(false)
-	const hasFuelRecs = ref(false)
+	const hasFills = ref(false)
 
 	const pick = (obj, key) => {
 		if (obj == null) {
@@ -87,6 +92,15 @@
 		}
 		const data = envelopeData(res)
 		note.value = pick(data, 'note') != null ? '' + pick(data, 'note') : ''
+		const spend = pick(data, 'spend')
+		elecCost.value = dashYuan(pick(spend, 'chargePaidCny'))
+		oilCost.value = dashYuan(pick(spend, 'refuelPaidCny'))
+		const useCost = pick(spend, 'elecUseCostCny')
+		if (useCost != null) {
+			weekCost.value = dashYuan(useCost) + ' · 按你填的充电折合'
+		} else {
+			weekCost.value = '官方按日 kWh 合计'
+		}
 		const official = pick(data, 'official')
 		freshText.value = timeLine(pick(official, 'fetchedAt'), null)
 		weekKwh.value = dashNum(pick(official, 'totalKwh'), '')
@@ -120,7 +134,6 @@
 			hasEleChart.value = false
 		}
 		const fuel = pick(data, 'fuel')
-		const recs : FuelRec[] = []
 		const oilVals : number[] = []
 		if (fuel != null && fuel.length > 0) {
 			const last = fuel[fuel.length - 1]
@@ -151,28 +164,36 @@
 				oilVals.push(abs)
 				i = i + 1
 			}
-			i = fuel.length - 1
-			let shown = 0
-			while (i >= 0 && shown < 8) {
-				const row = fuel[i]
+		}
+		const fills = pick(data, 'fills')
+		const recs : FillRec[] = []
+		if (fills != null) {
+			let fi = 0
+			while (fi < fills.length && fi < 20) {
+				const row = fills[fi]
 				const k = pick(row, 'kind')
-				if (k == 'flat') {
-					i = i - 1
-					continue
+				const title = k == 'refuel' ? '加油' : '充电'
+				let amt = dashYuan(pick(row, 'paidCny'))
+				if (pick(row, 'paidCny') == null) {
+					amt = '待补花费'
 				}
-				const title = k == 'refuel' ? '加油' : (k == 'burn' ? '耗油' : '油量变化')
-				const dlt = dashNum(pick(row, 'fuelPctDelta'), '%')
-				const fromAt = pick(row, 'fromAt')
-				const toAt = pick(row, 'toAt')
+				const unit = pick(row, 'unitCny')
+				let cal = '电量 ' + dashNum(pick(row, 'socStart'), '%') + ' → ' + dashNum(pick(row, 'socEnd'), '%')
+				if (k == 'refuel') {
+					cal = '油量 ' + dashNum(pick(row, 'fuelStart'), '%') + ' → ' + dashNum(pick(row, 'fuelEnd'), '%')
+				}
+				if (unit != null) {
+					cal = cal + ' · ' + dashYuan(unit) + (k == 'refuel' ? '/L' : '/kWh')
+				}
 				recs.push({
+					id: '' + pick(row, 'id'),
 					title: title,
-					amt: dlt,
-					oil: k != 'burn',
-					mid: '' + fromAt + ' → ' + toAt,
-					cal: '油量 ' + dashNum(pick(row, 'fuelPctFrom'), '%') + ' → ' + dashNum(pick(row, 'fuelPctTo'), '%')
+					amt: amt,
+					oil: k == 'refuel',
+					mid: '' + pick(row, 'finishedAt'),
+					cal: cal
 				})
-				shown = shown + 1
-				i = i - 1
+				fi = fi + 1
 			}
 		}
 		if (oilVals.length > 0) {
@@ -181,15 +202,27 @@
 		} else {
 			hasOilChart.value = false
 		}
-		fuelRecs.value = recs
-		hasFuelRecs.value = recs.length > 0
+		fillRecs.value = recs
+		hasFills.value = recs.length > 0
 	}
 
 	const tapHow = () => {
 		uni.showModal({
 			title: '电和油为什么拆开',
-			content: '官方能耗接口只有 kWh。油耗用连续快照的油量差分。至少两笔快照才记油。花费与充电记录没有接口前不编数字。',
+			content: '官方能耗接口只有 kWh。油耗用连续快照的油量差分。花费只计充电和加油的实付。自动充电草稿要有插枪或充电状态；枚举未对照时请点＋手补。',
 			showCancel: false
+		})
+	}
+
+	const goFill = (fid : string) => {
+		uni.navigateTo({
+			url: '/pages/fill/fill?id=' + fid
+		})
+	}
+
+	const goAdd = () => {
+		uni.navigateTo({
+			url: '/pages/fill/fill?kind=charge'
 		})
 	}
 
@@ -198,7 +231,7 @@
 		padStyle.value = padBoxStyle(true)
 		wrapStyle.value = pageWrapStyle()
 		infoIcon.value = navIcon('info')
-		fabBottom.value = fabOffset()
+		fabBox.value = fabStyle()
 		applyThemeChrome()
 	}
 
@@ -218,7 +251,7 @@
 			<view class="pad" :style="padStyle">
 				<view class="head">
 					<view class="head-main">
-						<text class="meta">电、油分开记 · 没有花费接口就不编钱</text>
+						<text class="meta">电、油分开记 · 花费按次实付</text>
 					</view>
 					<view class="icon-btn" @click="tapHow">
 						<image class="icon-img" :src="infoIcon" mode="aspectFit"></image>
@@ -237,7 +270,7 @@
 							<text class="tile-v">{{ weekKwh }}</text>
 							<text class="unit"> kWh</text>
 						</view>
-						<text class="tile-p">官方按日 kWh 合计</text>
+						<text class="tile-p">{{ weekCost }}</text>
 					</view>
 					<view class="tile-gap"></view>
 					<view class="tile">
@@ -284,15 +317,28 @@
 					</view>
 				</view>
 
-				<text class="sec-title">充电记录</text>
-				<view class="void">
-					<text class="void-t">还没有充电账单接口</text>
-					<text class="note">官方充电记录未接通。不编电费、不编校准容量。</text>
+				<text class="sec-title">充电 / 加油花费</text>
+				<view class="pair" style="margin-bottom: 10px;">
+					<view class="tile">
+						<view class="tile-accent"></view>
+						<text class="k">充电实付</text>
+						<view class="big-row">
+							<text class="tile-v">{{ elecCost }}</text>
+						</view>
+						<text class="tile-p">不是电网账单</text>
+					</view>
+					<view class="tile-gap"></view>
+					<view class="tile">
+						<view class="tile-accent tile-accent-oil"></view>
+						<text class="k">加油实付</text>
+						<view class="big-row">
+							<text class="tile-v tile-v-oil">{{ oilCost }}</text>
+						</view>
+						<text class="tile-p">不是油站小票</text>
+					</view>
 				</view>
-
-				<text class="sec-title">加油 / 耗油</text>
-				<view v-if="hasFuelRecs == true">
-					<view class="rec" v-for="(rec, i) in fuelRecs" :key="i">
+				<view v-if="hasFills == true">
+					<view class="rec" v-for="rec in fillRecs" :key="rec.id" @click="goFill(rec.id)">
 						<view class="rec-top">
 							<text class="rec-title">{{ rec.title }}</text>
 							<text class="rec-amt" :class="rec.oil == true ? 'rec-amt-oil' : ''">{{ rec.amt }}</text>
@@ -301,14 +347,14 @@
 						<text class="rec-cal">{{ rec.cal }}</text>
 					</view>
 				</view>
-				<view class="void" v-if="hasFuelRecs == false">
-					<text class="void-t">还没有油量差分</text>
-					<text class="note">至少两笔带油量的快照才会出现记录。</text>
+				<view class="void" v-if="hasFills == false">
+					<text class="void-t">还没有充电或加油记录</text>
+					<text class="note">点右下角 ＋ 手补。加油可从油量上升自动出草稿。充电自动草稿要有插枪/充电状态。</text>
 				</view>
-				<view class="page-end"></view>
+				<view class="page-end" style="height:80px"></view>
 			</view>
 		</scroll-view>
-		<view class="fab" :style="'bottom:' + fabBottom + 'px'" @click="notOpen">
+		<view class="fab" :style="fabBox" @click="goAdd">
 			<text class="fab-txt">＋</text>
 		</view>
 	</view>

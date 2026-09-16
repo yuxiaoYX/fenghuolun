@@ -72,6 +72,32 @@ type SyncJob struct {
 	DeletedAt      interface{}
 }
 
+type FillEvent struct {
+	g.Meta       `orm:"table:fill_event, do:true"`
+	Id           interface{}
+	BindingId    interface{}
+	Kind         interface{}
+	Source       interface{}
+	Status       interface{}
+	FromFetched  interface{}
+	ToFetched    interface{}
+	StartedAt    interface{}
+	FinishedAt   interface{}
+	OdoStart     interface{}
+	OdoEnd       interface{}
+	SocStart     interface{}
+	SocEnd       interface{}
+	FuelStart    interface{}
+	FuelEnd      interface{}
+	EnergyKwh    interface{}
+	Liters       interface{}
+	PaidCny      interface{}
+	Note         interface{}
+	CreatedAt    interface{}
+	UpdatedAt    interface{}
+	DeletedAt    interface{}
+}
+
 type AppSetting struct {
 	g.Meta    `orm:"table:app_settings, do:true"`
 	Key       interface{}

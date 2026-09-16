@@ -33,7 +33,7 @@ func CORS(origins func() string) ghttp.HandlerFunc {
 		if ok {
 			r.Response.Header().Set("Access-Control-Allow-Origin", origin)
 			r.Response.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			r.Response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+			r.Response.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			r.Response.WriteStatus(http.StatusNoContent)

@@ -145,6 +145,39 @@ func (s *SQLite) migrate() error {
   updated_at INTEGER,
   deleted_at INTEGER DEFAULT 0
 )`,
+		`CREATE TABLE IF NOT EXISTS owner_ledger (
+  binding_id TEXT PRIMARY KEY,
+  elec_cny_per_kwh REAL,
+  fuel_cny_per_l REAL,
+  tank_l REAL,
+  created_at INTEGER,
+  updated_at INTEGER,
+  deleted_at INTEGER DEFAULT 0
+)`,
+		`CREATE TABLE IF NOT EXISTS fill_event (
+  id TEXT PRIMARY KEY,
+  binding_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual',
+  status TEXT NOT NULL DEFAULT 'draft',
+  from_fetched INTEGER NOT NULL DEFAULT 0,
+  to_fetched INTEGER NOT NULL DEFAULT 0,
+  started_at INTEGER NOT NULL DEFAULT 0,
+  finished_at INTEGER NOT NULL DEFAULT 0,
+  odo_start REAL,
+  odo_end REAL,
+  soc_start REAL,
+  soc_end REAL,
+  fuel_start REAL,
+  fuel_end REAL,
+  energy_kwh REAL,
+  liters REAL,
+  paid_cny REAL,
+  note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER,
+  updated_at INTEGER,
+  deleted_at INTEGER DEFAULT 0
+)`,
 	} {
 		if _, err := s.db.Exec(ctx, stmt); err != nil {
 			return err
@@ -286,7 +319,7 @@ func (s *SQLite) Put(b *Binding) error {
 		}
 	}
 	ctx := s.ctx()
-	return s.db.Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
+	err = s.db.Transaction(ctx, func(ctx context.Context, tx gdb.TX) error {
 		if _, err := tx.Model("binding").Ctx(ctx).Data(row).OnConflict("id").Save(); err != nil {
 			return err
 		}
@@ -355,6 +388,11 @@ func (s *SQLite) Put(b *Binding) error {
 		_, err := tx.Model("sync_job").Ctx(ctx).Data(syncJobData(b.ID, b.SyncKind, b.SyncStatus, b.SyncError, at)).Insert()
 		return err
 	})
+	if err != nil {
+		return err
+	}
+	_ = s.SyncFills(b.ID)
+	return nil
 }
 
 func syncJobData(bindingID, kind, status, publicErr string, at time.Time) do.SyncJob {

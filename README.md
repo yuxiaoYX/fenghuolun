@@ -27,6 +27,7 @@
 1. [`docs/HANDOFF.md`](docs/HANDOFF.md)
 2. [`docs/02-decisions.md`](docs/02-decisions.md)
 3. [`docs/README.md`](docs/README.md)
+4. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — 1Panel / Docker 生产部署
 
 抓包附录只留本机 `docs/HAR-ANALYSIS.md`（已 gitignore，不进仓库）。
 

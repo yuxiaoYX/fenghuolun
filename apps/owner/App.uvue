@@ -997,6 +997,57 @@
 		overflow: hidden;
 		margin-bottom: 12px;
 	}
+	.form-line {
+		flex-direction: row;
+		align-items: center;
+		min-height: 52px;
+		padding-top: 4px;
+		padding-right: 14px;
+		padding-bottom: 4px;
+		padding-left: 14px;
+	}
+	.form-k {
+		width: 108px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+	}
+	.form-in {
+		flex: 1;
+		height: 40px;
+		min-height: 40px;
+		margin-top: 0px;
+		font-size: 16px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+		background-color: var(--fhl-pan2);
+		border-width: 0px;
+		border-radius: 10px;
+		padding-top: 0px;
+		padding-right: 10px;
+		padding-bottom: 0px;
+		padding-left: 10px;
+	}
+	.form-u {
+		margin-left: 8px;
+		width: 28px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.form-u-wide {
+		margin-left: 8px;
+		width: 44px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.form-val {
+		flex: 1;
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
 	.row {
 		flex-direction: row;
 		align-items: center;

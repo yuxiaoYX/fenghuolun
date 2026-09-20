@@ -1,0 +1,15 @@
+services:
+  fenghuolun:
+    image: ghcr.io/yuxiaoyx/fenghuolun:${IMAGE_TAG:-master}
+    container_name: fenghuolun
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      FENGHUOLUN_HTTP_ADDR: 0.0.0.0:8088
+      FENGHUOLUN_SQLITE_PATH: /var/lib/fenghuolun/fenghuolun.db
+      FENGHUOLUN_ADMIN_DIR: /app/admin
+    ports:
+      - "127.0.0.1:18088:8088"
+    volumes:
+      - /opt/fenghuolun/data:/var/lib/fenghuolun

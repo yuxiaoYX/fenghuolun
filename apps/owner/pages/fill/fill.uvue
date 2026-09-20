@@ -229,39 +229,99 @@
 					</view>
 				</view>
 
-				<text class="field">当前总里程（公里）</text>
-				<input class="input" style="min-height:44px" v-model="odoEnd" placeholder="快照预填，可改" />
-
-				<view v-if="kind == 'charge'">
-					<text class="field">充电金额（元）</text>
-					<input class="input" style="min-height:44px" v-model="paid" placeholder="这次实付。空着只当草稿" />
-					<text class="field">充电电量（度）</text>
-					<input class="input" style="min-height:44px" v-model="qty" placeholder="枪上的度数。不填不算单价和容量" />
-					<text class="note" v-if="unitTxt.length > 0">{{ unitTxt }}</text>
-					<text class="field">开始充电时电量 %</text>
-					<input class="input" style="min-height:44px" v-model="socStart" placeholder="可改" />
-					<text class="field">结束充电时电量 %</text>
-					<input class="input" style="min-height:44px" v-model="socEnd" placeholder="可改" />
-					<text class="field">当时油量 %</text>
-					<input class="input" style="min-height:44px" v-model="fuelEnd" placeholder="可改" />
+				<view class="group">
+					<view class="form-line" v-if="whenTxt.length > 0">
+						<text class="form-k">日期时间</text>
+						<text class="form-val">{{ whenTxt }}</text>
+					</view>
+					<view class="hair" v-if="whenTxt.length > 0"></view>
+					<view class="form-line">
+						<text class="form-k">当前总里程</text>
+						<input class="form-in" v-model="odoEnd" placeholder="可改" />
+						<text class="form-u-wide">公里</text>
+					</view>
 				</view>
 
-				<view v-if="kind == 'refuel'">
-					<text class="field">实付金额（元）</text>
-					<input class="input" style="min-height:44px" v-model="paid" placeholder="这次实付。空着只当草稿" />
-					<text class="field">加油量（升）</text>
-					<input class="input" style="min-height:44px" v-model="qty" placeholder="机显升数。不填不算单价" />
-					<text class="note" v-if="unitTxt.length > 0">{{ unitTxt }}</text>
-					<text class="field">加油前油量 %</text>
-					<input class="input" style="min-height:44px" v-model="fuelStart" placeholder="可改" />
-					<text class="field">加油后油量 %</text>
-					<input class="input" style="min-height:44px" v-model="fuelEnd" placeholder="可改" />
-					<text class="field">当时电量 %</text>
-					<input class="input" style="min-height:44px" v-model="socEnd" placeholder="可改" />
+				<view class="group" v-if="kind == 'charge'">
+					<view class="form-line">
+						<text class="form-k">充电金额</text>
+						<input class="form-in" v-model="paid" placeholder="实付，空着为草稿" />
+						<text class="form-u">元</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">充电电量</text>
+						<input class="form-in" v-model="qty" placeholder="枪上度数，可选" />
+						<text class="form-u">度</text>
+					</view>
+					<view class="hair" v-if="unitTxt.length > 0"></view>
+					<view class="form-line" v-if="unitTxt.length > 0">
+						<text class="form-k">折合电价</text>
+						<text class="form-val">{{ unitTxt }}</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">开始充电时</text>
+						<input class="form-in" v-model="socStart" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">结束充电时</text>
+						<input class="form-in" v-model="socEnd" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">当时油量</text>
+						<input class="form-in" v-model="fuelEnd" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
 				</view>
 
-				<text class="field">备注</text>
-				<input class="input" style="min-height:44px" v-model="note" placeholder="可选" />
+				<view class="group" v-if="kind == 'refuel'">
+					<view class="form-line">
+						<text class="form-k">实付金额</text>
+						<input class="form-in" v-model="paid" placeholder="实付，空着为草稿" />
+						<text class="form-u">元</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">加油量</text>
+						<input class="form-in" v-model="qty" placeholder="机显升数，可选" />
+						<text class="form-u">升</text>
+					</view>
+					<view class="hair" v-if="unitTxt.length > 0"></view>
+					<view class="form-line" v-if="unitTxt.length > 0">
+						<text class="form-k">折合油价</text>
+						<text class="form-val">{{ unitTxt }}</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">加油前油量</text>
+						<input class="form-in" v-model="fuelStart" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">加油后油量</text>
+						<input class="form-in" v-model="fuelEnd" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">当时电量</text>
+						<input class="form-in" v-model="socEnd" placeholder="可改" />
+						<text class="form-u">%</text>
+					</view>
+				</view>
+
+				<view class="group">
+					<view class="form-line">
+						<text class="form-k">备注</text>
+						<input class="form-in" v-model="note" placeholder="可选" />
+					</view>
+				</view>
 				<button class="primary" :disabled="busy == true" @click="save">保存</button>
 				<button class="ghost" :disabled="busy == true" @click="drop">{{ id == '' ? '取消' : '删除' }}</button>
 				<text class="err" v-if="err.length > 0">{{ err }}</text>

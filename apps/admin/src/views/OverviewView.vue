@@ -13,7 +13,7 @@ const health = ref<AdminHealth | null>(null)
 onMounted(async () => {
   try {
     const z = await api.healthz()
-    phase.value = `后端 ${z.status} · 分期 ${z.phase}`
+    phase.value = `后端 ${z.status} · 分期 ${z.phase}` + (z.version ? ` · ${z.version}` : '')
   } catch {
     phase.value = '后端未启动（默认 http://127.0.0.1:8088）'
   }

@@ -19,3 +19,9 @@ var (
 		},
 	}
 )
+
+func init() {
+	if err := Main.AddCommand(&ApplyUpdate); err != nil {
+		panic(err)
+	}
+}

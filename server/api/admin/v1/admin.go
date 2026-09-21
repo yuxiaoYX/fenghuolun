@@ -107,11 +107,11 @@ type KickBindingRes struct {
 }
 
 type JobsReq struct {
-	g.Meta     `path:"/jobs" method:"get" tags:"Admin"`
-	BindingId  string `json:"bindingId" in:"query"`
-	Status     string `json:"status" in:"query"`
-	Page       int    `json:"page" in:"query"`
-	PageSize   int    `json:"pageSize" in:"query"`
+	g.Meta    `path:"/jobs" method:"get" tags:"Admin"`
+	BindingId string `json:"bindingId" in:"query"`
+	Status    string `json:"status" in:"query"`
+	Page      int    `json:"page" in:"query"`
+	PageSize  int    `json:"pageSize" in:"query"`
 }
 
 type JobsRes struct {
@@ -128,11 +128,11 @@ type TablesRes struct {
 }
 
 type TableRowsReq struct {
-	g.Meta     `path:"/tables/{name}" method:"get" tags:"Admin"`
-	Name       string `json:"name" in:"path" v:"required"`
-	BindingId  string `json:"bindingId" in:"query"`
-	Page       int    `json:"page" in:"query"`
-	PageSize   int    `json:"pageSize" in:"query"`
+	g.Meta    `path:"/tables/{name}" method:"get" tags:"Admin"`
+	Name      string `json:"name" in:"path" v:"required"`
+	BindingId string `json:"bindingId" in:"query"`
+	Page      int    `json:"page" in:"query"`
+	PageSize  int    `json:"pageSize" in:"query"`
 }
 
 type TableRowsRes struct {
@@ -157,4 +157,33 @@ type SettingsPutReq struct {
 
 type SettingsPutRes struct {
 	store.Settings
+}
+
+type SystemReq struct {
+	g.Meta  `path:"/system" method:"get" tags:"Admin" summary:"当前版本与是否可后台更新"`
+	Refresh bool `json:"refresh" in:"query"`
+}
+
+type SystemRes struct {
+	Version         string `json:"version"`
+	Commit          string `json:"commit,omitempty"`
+	Latest          string `json:"latest"`
+	LatestURL       string `json:"latestUrl,omitempty"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	InDocker        bool   `json:"inDocker"`
+	DockerAvailable bool   `json:"dockerAvailable"`
+	CanApply        bool   `json:"canApply"`
+	Updating        bool   `json:"updating"`
+	Target          string `json:"target,omitempty"`
+	Image           string `json:"image,omitempty"`
+	Hint            string `json:"hint"`
+}
+
+type SystemUpdateReq struct {
+	g.Meta `path:"/system/update" method:"post" tags:"Admin" summary:"拉取最新 Release 镜像并重建本容器"`
+}
+
+type SystemUpdateRes struct {
+	Target string `json:"target"`
+	Status string `json:"status"`
 }

@@ -1,15 +1,38 @@
+name: fenghuolun
+
 services:
   fenghuolun:
     image: ghcr.io/yuxiaoyx/fenghuolun:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: fenghuolun
     restart: unless-stopped
-    env_file:
-      - .env.production
+    pull_policy: missing
     environment:
       FENGHUOLUN_HTTP_ADDR: 0.0.0.0:8088
       FENGHUOLUN_SQLITE_PATH: /var/lib/fenghuolun/fenghuolun.db
       FENGHUOLUN_ADMIN_DIR: /app/admin
+      FENGHUOLUN_TOKEN_KEK: ${FENGHUOLUN_TOKEN_KEK:-}
+      FENGHUOLUN_CORS_ORIGINS: ${FENGHUOLUN_CORS_ORIGINS:-}
+      FENGHUOLUN_ADMIN_BOOTSTRAP_USER: ${FENGHUOLUN_ADMIN_BOOTSTRAP_USER:-}
+      FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD: ${FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD:-}
+      FENGHUOLUN_NETA_SCALE: ${FENGHUOLUN_NETA_SCALE:-}
+      FENGHUOLUN_CRON_SYNC: ${FENGHUOLUN_CRON_SYNC:-}
     ports:
-      - "127.0.0.1:18088:8088"
+      - "${FENGHUOLUN_PUBLISH:-8088:8088}"
     volumes:
-      - /opt/fenghuolun/data:/var/lib/fenghuolun
+      - ${FENGHUOLUN_DATA_DIR:-./data}:/var/lib/fenghuolun
+      # 后台「一点更新」需要。不想给容器 Docker 权限就删掉这一行。
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

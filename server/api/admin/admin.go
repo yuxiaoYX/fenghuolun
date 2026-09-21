@@ -23,4 +23,6 @@ type IAdminV1 interface {
 	TableRows(ctx context.Context, req *v1.TableRowsReq) (res *v1.TableRowsRes, err error)
 	SettingsGet(ctx context.Context, req *v1.SettingsGetReq) (res *v1.SettingsGetRes, err error)
 	SettingsPut(ctx context.Context, req *v1.SettingsPutReq) (res *v1.SettingsPutRes, err error)
+	System(ctx context.Context, req *v1.SystemReq) (res *v1.SystemRes, err error)
+	SystemUpdate(ctx context.Context, req *v1.SystemUpdateReq) (res *v1.SystemUpdateRes, err error)
 }

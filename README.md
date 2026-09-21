@@ -10,6 +10,54 @@
 
 第 **1** 期只读协议、第 **2** 期落库与管理员运维台已落地。权威说明只以 `docs/` 为准。下一期是车主前台蒸汽模式真机（第 3 期），不要做车控。
 
+## 快速开始
+
+需要 [Docker](https://docs.docker.com/get-docker/) 和 Compose v2。
+
+```bash
+git clone https://github.com/yuxiaoYX/fenghuolun.git
+cd fenghuolun
+bash deploy/init-env.sh          # Windows: pwsh -File deploy/init-env.ps1
+docker compose up -d
+```
+
+`init-env` 会打印首次管理员密码（也写入 `.env`）。打开 <http://127.0.0.1:8088/login> ，登录后立刻改密。
+
+健康检查：`curl -fsS http://127.0.0.1:8088/healthz`（应含 `phase=2`）。
+
+不克隆整仓、只拉镜像：
+
+```bash
+mkdir -p fenghuolun && cd fenghuolun
+curl -fsSL -O https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/docker-compose.yml
+KEK=$(openssl rand -base64 48 | tr -d '\n')
+PASS=$(openssl rand -hex 16)
+printf 'FENGHUOLUN_TOKEN_KEK=%s\nFENGHUOLUN_ADMIN_BOOTSTRAP_USER=admin\nFENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD=%s\n' "$KEK" "$PASS" > .env
+echo "admin / $PASS"
+docker compose up -d
+```
+
+或一条 `docker run`：
+
+```bash
+export FENGHUOLUN_TOKEN_KEK="$(openssl rand -base64 48)"
+export FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD="$(openssl rand -hex 16)"
+echo "admin / $FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD"
+
+docker run -d --name fenghuolun --restart unless-stopped \
+  -p 8088:8088 -v fenghuolun-data:/var/lib/fenghuolun \
+  -e FENGHUOLUN_TOKEN_KEK \
+  -e FENGHUOLUN_ADMIN_BOOTSTRAP_USER=admin \
+  -e FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD \
+  ghcr.io/yuxiaoyx/fenghuolun:latest
+```
+
+密码看 `echo` 那一行；容器重建时不要换 `FENGHUOLUN_TOKEN_KEK`。
+
+管理员登录后，**设置 → 系统更新** 可检查并一点升到最新 GitHub Release（需容器挂载 docker.sock）。1Panel / 反代 / 命令行升级 / 备份：见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+
+生产不要把 `8088` 暴露到公网。镜像来自 `ghcr.io/yuxiaoyx/fenghuolun`，`latest` 只跟随 `v*` Release。
+
 ## 形态
 
 | 端 | 路径 | 技术 | 谁用 |
@@ -27,25 +75,9 @@
 1. [`docs/HANDOFF.md`](docs/HANDOFF.md)
 2. [`docs/02-decisions.md`](docs/02-decisions.md)
 3. [`docs/README.md`](docs/README.md)
-4. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — 生产一键部署（1Panel / Docker）
+4. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Docker Compose / docker run / 1Panel
 
 抓包附录只留本机 `docs/HAR-ANALYSIS.md`（已 gitignore，不进仓库）。
-
-## 生产（一键）
-
-1Panel 打开 **终端**，贴这一行（有域名把地址换上）：
-
-```bash
-curl -sSL https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/deploy/install.sh | bash -s -- --domain https://你的域名
-```
-
-脚本会建目录、生成密钥和管理员密码、拉 `latest` 镜像并启动。然后在 1Panel **网站 → 反向代理** 指到 `http://127.0.0.1:18088`，再开 Let’s Encrypt。升级：
-
-```bash
-/opt/fenghuolun/deploy/install.sh upgrade
-```
-
-说明见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。镜像私有时先在 **容器 → 仓库** 登录 `ghcr.io`。
 
 ## 怎么跑（开发）
 
@@ -81,7 +113,8 @@ pnpm --dir apps/admin dev
 apps/owner     车主 uni-app x（蒸汽模式）
 apps/admin     管理员 Web（antdv-next）
 server         Go
-deploy         生产一键安装脚本
+deploy         安装脚本、容器入口
+docker-compose.yml  克隆后 docker compose up -d
 testdata/neta  解码单测用的脱敏官方响应样例
 docs           权威文档
 ```

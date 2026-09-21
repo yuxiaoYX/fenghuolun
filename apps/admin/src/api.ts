@@ -152,8 +152,8 @@ export const api = {
   health: () => adminFetch<AdminHealth>('/api/v1/admin/health'),
   healthz: async () => {
     const res = await fetch('/healthz')
-    const body = (await res.json()) as Envelope<{ status?: string; phase?: string }>
-    return { status: body.data?.status ?? '?', phase: body.data?.phase ?? '?' }
+    const body = (await res.json()) as Envelope<{ status?: string; phase?: string; version?: string }>
+    return { status: body.data?.status ?? '?', phase: body.data?.phase ?? '?', version: body.data?.version ?? '' }
   },
   bindings: () => adminFetch<{ items: BindingRow[] }>('/api/v1/admin/bindings'),
   binding: (id: string) => adminFetch<BindingDetail>('/api/v1/admin/bindings/' + encodeURIComponent(id)),
@@ -186,4 +186,23 @@ export const api = {
   settings: () => adminFetch<Settings>('/api/v1/admin/settings'),
   saveSettings: (body: Settings) =>
     adminFetch<Settings>('/api/v1/admin/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  system: (refresh = false) =>
+    adminFetch<SystemInfo>('/api/v1/admin/system' + (refresh ? '?refresh=1' : '')),
+  systemUpdate: () =>
+    adminFetch<{ target: string; status: string }>('/api/v1/admin/system/update', { method: 'POST' }),
+}
+
+export type SystemInfo = {
+  version: string
+  commit?: string
+  latest: string
+  latestUrl?: string
+  updateAvailable: boolean
+  inDocker: boolean
+  dockerAvailable: boolean
+  canApply: boolean
+  updating: boolean
+  target?: string
+  image?: string
+  hint: string
 }

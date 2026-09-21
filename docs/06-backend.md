@@ -4,7 +4,7 @@
 
 框架：`github.com/gogf/gf/v2`。工程按 `gf init` 脚手架：`server/main.go` + `internal/cmd`。一个进程同时服务：
 
-- `GET /healthz`
+- `GET /healthz`（`status` / `phase` / `version`）
 - `/api/v1/owner/*` 车主
 - `/api/v1/admin/*` 管理员
 - 可选托管 `apps/admin` 构建产物（`FENGHUOLUN_ADMIN_DIR` 指向 `dist`，同端口提供 `/` `/login` `/bindings` 等）
@@ -17,13 +17,17 @@
 |---|---|
 | `FENGHUOLUN_HTTP_ADDR` | 如 `:8088` |
 | `FENGHUOLUN_SQLITE_PATH` | 如 `./data/fenghuolun.db` |
-| `FENGHUOLUN_TOKEN_KEK` | 凭证加密主密钥，至少 32 字节熵，**必填**（缺则进程起不来） |
+| `FENGHUOLUN_TOKEN_KEK` | 凭证加密主密钥，至少 32 字节熵，**必填**（缺则进程起不来）。生产镜像入口会在未设置时写入数据目录 `token.kek` |
 | `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` | 仅当库中无管理员时创建 |
 | `FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD` | 同上 |
 | `FENGHUOLUN_CORS_ORIGINS` | 空库写入 `app_settings` 的缺省；之后以后台设置为准 |
 | `FENGHUOLUN_CRON_SYNC` | 同上。默认关；如 `15m`。改后台后热替换 gcron，不必重启 |
 | `FENGHUOLUN_NETA_SCALE` | 默认关（续航/电压为 —）。`candidate` 启用 `/10` 并带 decodeWarnings |
 | `FENGHUOLUN_ADMIN_DIR` | 可选。管理端 `pnpm --dir apps/admin build` 的 `dist` 目录。空则不托管，开发用 Vite `:5173` |
+| `FENGHUOLUN_UPDATE_REPO` | 查 GitHub Release 的 `owner/repo`，默认 `yuxiaoYX/fenghuolun`。设为 `-` 关闭检查 |
+| `FENGHUOLUN_UPDATE_IMAGE` | 拉取的镜像名，默认 `ghcr.io/yuxiaoyx/fenghuolun` |
+| `FENGHUOLUN_CONTAINER_NAME` | 本容器名，默认 `fenghuolun` |
+| `FENGHUOLUN_UPDATE_DISABLE` | `1` 时后台「一点更新」关闭（仍可看版本） |
 
 `HTTP_ADDR` / `SQLITE_PATH` / `TOKEN_KEK` / `ADMIN_DIR` 只在环境变量，后台改不了。`CORS` / `CRON` / 快照保留 / 陈旧阈值在 `app_settings`。会话是随机 ID + 哈希，没有 `SESSION_SECRET`。
 
@@ -111,6 +115,8 @@
 | `GET` | `/api/v1/admin/tables/:name` | 脱敏分页；密文/哈希不返回 |
 | `GET` | `/api/v1/admin/settings` | 运行时设置 |
 | `PUT` | `/api/v1/admin/settings` | 写入 `app_settings` 并热替换 cron |
+| `GET` | `/api/v1/admin/system` | 当前版本、最新 Release、是否可在后台更新。`?refresh=1` 跳过缓存 |
+| `POST` | `/api/v1/admin/system/update` | 备份 SQLite、拉最新 `v*` 镜像、用 Docker 套接字重建本容器 |
 
 管理员请求头与车主不同 audience，中间件分开。`sync_job` 是追加历史，不是一车一行。
 

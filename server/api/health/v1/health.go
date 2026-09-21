@@ -7,6 +7,7 @@ type HealthzReq struct {
 }
 
 type HealthzRes struct {
-	Status string `json:"status"`
-	Phase  string `json:"phase"`
+	Status  string `json:"status"`
+	Phase   string `json:"phase"`
+	Version string `json:"version"`
 }

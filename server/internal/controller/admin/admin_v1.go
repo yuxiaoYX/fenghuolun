@@ -11,6 +11,7 @@ import (
 	"fenghuolun/internal/coded"
 	"fenghuolun/internal/middleware"
 	"fenghuolun/internal/store"
+	"fenghuolun/internal/update"
 )
 
 func (c *ControllerV1) Login(ctx context.Context, req *v1.LoginReq) (res *v1.LoginRes, err error) {
@@ -134,6 +135,36 @@ func (c *ControllerV1) SettingsPut(ctx context.Context, req *v1.SettingsPutReq) 
 		return nil, coded.New(http.StatusBadRequest, "invalid_request", "定时同步表达式无法使用")
 	}
 	return &v1.SettingsPutRes{Settings: saved}, nil
+}
+
+func (c *ControllerV1) System(ctx context.Context, req *v1.SystemReq) (res *v1.SystemRes, err error) {
+	st := update.Probe(ctx, req.Refresh)
+	return &v1.SystemRes{
+		Version:         st.Version,
+		Commit:          st.Commit,
+		Latest:          st.Latest,
+		LatestURL:       st.LatestURL,
+		UpdateAvailable: st.UpdateAvailable,
+		InDocker:        st.InDocker,
+		DockerAvailable: st.DockerAvailable,
+		CanApply:        st.CanApply,
+		Updating:        st.Updating,
+		Target:          st.Target,
+		Image:           st.Image,
+		Hint:            st.Hint,
+	}, nil
+}
+
+func (c *ControllerV1) SystemUpdate(ctx context.Context, req *v1.SystemUpdateReq) (res *v1.SystemUpdateRes, err error) {
+	out, err := update.StartApply(ctx, c.Cfg.SQLitePath)
+	if err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "already running") {
+			return nil, coded.New(http.StatusBadRequest, "invalid_request", "正在更新，请稍候")
+		}
+		return nil, coded.New(http.StatusBadRequest, "invalid_request", msg)
+	}
+	return &v1.SystemUpdateRes{Target: out.Target, Status: out.Status}, nil
 }
 
 func sessionOf(ctx context.Context) string {

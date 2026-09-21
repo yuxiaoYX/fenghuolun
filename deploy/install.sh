@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 风火轮一键部署。1Panel 终端或任意 Linux 直接跑：
+# 风火轮 1Panel / Linux 一键部署（容器只听 127.0.0.1:18088）。
 #   curl -sSL https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/deploy/install.sh | bash
+# 克隆仓库后用 Docker Compose 的方式见 docs/DEPLOYMENT.md。
 set -euo pipefail
 
 PREFIX=/opt/fenghuolun
@@ -32,6 +33,10 @@ usage() {
 选项:
   --domain https://你的域名   写入 CORS（仅首次生成 .env.production 时）
   --prefix DIR               安装根目录，默认 /opt/fenghuolun
+
+克隆仓库后用 Docker Compose（不走本脚本）见 docs/DEPLOYMENT.md:
+  git clone https://github.com/yuxiaoYX/fenghuolun.git
+  cd fenghuolun && bash deploy/init-env.sh && docker compose up -d
 EOF
 }
 
@@ -86,6 +91,8 @@ compose() {
 
 write_compose() {
   cat >"$DEPLOY_DIR/docker-compose.yml" <<'EOF'
+name: fenghuolun
+
 services:
   fenghuolun:
     image: ghcr.io/yuxiaoyx/fenghuolun:${IMAGE_TAG:-latest}
@@ -101,6 +108,18 @@ services:
       - "127.0.0.1:18088:8088"
     volumes:
       - /opt/fenghuolun/data:/var/lib/fenghuolun
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 EOF
   if [[ "$PREFIX" != "/opt/fenghuolun" ]]; then
     if sed --version >/dev/null 2>&1; then

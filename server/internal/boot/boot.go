@@ -46,7 +46,7 @@ func Register(s *ghttp.Server, cfg config.Config) *ownersvc.Service {
 	})
 	s.Group("/api/v1/admin", func(group *ghttp.RouterGroup) {
 		group.Middleware(middleware.Envelope, middleware.AdminAuth(st))
-		group.Bind(admin.NewV1(st, svc))
+		group.Bind(admin.NewV1(st, svc, cfg))
 	})
 	if err := ownersvc.StartCron(context.Background(), cfg, svc); err != nil {
 		panic(err)

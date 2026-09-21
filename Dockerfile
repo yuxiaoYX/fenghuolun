@@ -19,13 +19,18 @@ COPY server/go.mod server/go.sum ./
 RUN go mod download
 
 COPY server .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/fenghuolun .
+
+ARG VERSION=dev
+ARG GIT_SHA=
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
+    -ldflags="-s -w -X fenghuolun/internal/version.Version=${VERSION} -X fenghuolun/internal/version.Commit=${GIT_SHA}" \
+    -o /out/fenghuolun .
 
 
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata curl \
     && rm -rf /var/lib/apt/lists/*
 
 ENV TZ=Asia/Shanghai \
@@ -36,6 +41,11 @@ ENV TZ=Asia/Shanghai \
 WORKDIR /app
 COPY --from=server-build /out/fenghuolun /app/fenghuolun
 COPY --from=admin-build /src/apps/admin/dist /app/admin
+COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh \
+    && mkdir -p /var/lib/fenghuolun
 
 EXPOSE 8088
-ENTRYPOINT ["/app/fenghuolun"]
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=10 \
+    CMD curl -fsS http://127.0.0.1:8088/healthz || exit 1
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -526,3 +526,53 @@ func TestAdminConsoleAPIs(t *testing.T) {
 		t.Fatalf("account %d %s", acc.StatusCode, accBody)
 	}
 }
+
+func TestAdminSystem(t *testing.T) {
+	t.Setenv("FENGHUOLUN_UPDATE_REPO", "-")
+	prefix := startOwner(t)
+	deny, err := g.Client().Get(context.Background(), prefix+"/api/v1/admin/system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer deny.Close()
+	if deny.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("deny %d %s", deny.StatusCode, deny.ReadAllString())
+	}
+	login, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/admin/login", `{"username":"admin","password":"secret-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer login.Close()
+	var env struct {
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(login.ReadAll(), &env); err != nil {
+		t.Fatal(err)
+	}
+	admin := g.Client().SetHeader("Authorization", "Bearer "+env.Data.Session)
+	sys, err := admin.Get(context.Background(), prefix+"/api/v1/admin/system")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sys.Close()
+	body := sys.ReadAllString()
+	if sys.StatusCode != http.StatusOK {
+		t.Fatalf("system %d %s", sys.StatusCode, body)
+	}
+	if !strings.Contains(body, `"version":"dev"`) {
+		t.Fatalf("want dev version: %s", body)
+	}
+	if strings.Contains(body, `"canApply":true`) {
+		t.Fatalf("go test must not offer docker apply: %s", body)
+	}
+	up, err := admin.ContentJson().Post(context.Background(), prefix+"/api/v1/admin/system/update", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
+	if up.StatusCode == http.StatusOK {
+		t.Fatalf("update must not start outside docker: %s", up.ReadAllString())
+	}
+}

@@ -373,7 +373,7 @@ Compose 默认挂了 `/var/run/docker.sock`。管理员登录 → **设置 → �
 
 ### 命令行
 
-生产只跟 `v*` 的 `latest`（或把 `IMAGE_TAG` 钉死）。
+生产只跟 `v*` 的 `latest`（或把 `IMAGE_TAG` 钉死）。打 `v*` 标签后 Actions 会推 GHCR **并创建 GitHub Release**。git tag 和 GitHub Releases 页不是一回事：以前只推 tag 时，后台若只看 `/releases/latest` 会漏掉新版本；现在查找会同时看 tag，且发版工作流会把 Release 补上。
 
 ```bash
 cd fenghuolun          # 或 /opt/fenghuolun/deploy

@@ -87,33 +87,47 @@ func fetchLatest() (Release, error) {
 	if repo == "-" {
 		return Release{}, fmt.Errorf("disabled")
 	}
-	rel, err := getJSON[githubLatest](githubAPI + "/repos/" + repo + "/releases/latest")
-	if err == nil && !rel.Draft && !rel.Prerelease && IsReleaseTag(rel.TagName) {
-		return Release{
-			Tag:     NormalizeTag(rel.TagName),
-			URL:     rel.HTMLURL,
-			Notes:   strings.TrimSpace(rel.Body),
-			Fetched: time.Now(),
-		}, nil
+	// GitHub「Release」和 git tag 不是一回事。只信 /releases/latest 会把
+	// 已打 tag、尚未点 Publish 的版本漏掉。两边都拉，取最高 v*。
+	var names []string
+	notes := map[string]string{}
+	urls := map[string]string{}
+
+	rel, relErr := getJSON[githubLatest](githubAPI + "/repos/" + repo + "/releases/latest")
+	if relErr == nil && !rel.Draft && !rel.Prerelease && IsReleaseTag(rel.TagName) {
+		tag := NormalizeTag(rel.TagName)
+		names = append(names, tag)
+		notes[tag] = strings.TrimSpace(rel.Body)
+		urls[tag] = rel.HTMLURL
 	}
-	tags, err2 := getJSON[[]githubTag](githubAPI + "/repos/" + repo + "/tags?per_page=30")
-	if err2 != nil {
-		if err != nil {
-			return Release{}, fmt.Errorf("github: %v", err)
+
+	tags, tagErr := getJSON[[]githubTag](githubAPI + "/repos/" + repo + "/tags?per_page=30")
+	if tagErr == nil {
+		for _, t := range tags {
+			names = append(names, t.Name)
 		}
-		return Release{}, fmt.Errorf("github tags: %v", err2)
 	}
-	names := make([]string, 0, len(tags))
-	for _, t := range tags {
-		names = append(names, t.Name)
+	if len(names) == 0 {
+		if relErr != nil {
+			return Release{}, fmt.Errorf("github: %v", relErr)
+		}
+		if tagErr != nil {
+			return Release{}, fmt.Errorf("github tags: %v", tagErr)
+		}
+		return Release{}, fmt.Errorf("github: no production release yet")
 	}
 	best, err := PickLatestRelease(names)
 	if err != nil {
 		return Release{}, fmt.Errorf("github: no production release yet")
 	}
+	url := urls[best]
+	if url == "" {
+		url = "https://github.com/" + repo + "/releases/tag/" + best
+	}
 	return Release{
 		Tag:     best,
-		URL:     "https://github.com/" + repo + "/releases/tag/" + best,
+		URL:     url,
+		Notes:   notes[best],
 		Fetched: time.Now(),
 	}, nil
 }

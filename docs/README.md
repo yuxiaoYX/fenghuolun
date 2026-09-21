@@ -21,6 +21,7 @@
 | [09-protocol-neta.md](09-protocol-neta.md) | 哪吒官方接口：证据 vs 猜测 |
 | [10-security.md](10-security.md) | 凭证、HAR、开源边界 |
 | [11-conventions.md](11-conventions.md) | 编码与文档约定 |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | 1Panel / GHCR / Release 生产部署 |
 | `HAR-ANALYSIS.md`（本机，已 gitignore） | 本地 `1.har` 的抓包证据附录，**不进仓库** |
 
 **已作废（不要再当需求来源）：**

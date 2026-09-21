@@ -1,6 +1,6 @@
 services:
   fenghuolun:
-    image: ghcr.io/yuxiaoyx/fenghuolun:${IMAGE_TAG:-master}
+    image: ghcr.io/yuxiaoyx/fenghuolun:${IMAGE_TAG:-latest}
     container_name: fenghuolun
     restart: unless-stopped
     env_file:

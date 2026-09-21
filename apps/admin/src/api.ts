@@ -48,8 +48,9 @@ export async function adminFetch<T>(path: string, init: RequestInit = {}): Promi
     const code = body.error?.code ?? 'error'
     if (code === 'unauthorized' && path !== '/api/v1/admin/login' && path !== '/api/v1/admin/password') {
       clearToken()
-      if (location.pathname !== '/login') {
-        location.href = '/login'
+      const loginPath = import.meta.env.BASE_URL + 'login'
+      if (location.pathname !== loginPath.replace(/\/+/g, '/')) {
+        location.href = loginPath
       }
     }
     throw new ApiError(body.error?.message ?? '请求失败', code, res.status)

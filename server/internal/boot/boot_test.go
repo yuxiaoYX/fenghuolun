@@ -98,7 +98,7 @@ func TestAdminSPA(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Shutdown() })
 	prefix := "http://127.0.0.1:" + strconv.Itoa(s.GetListenedPort())
-	html, err := g.Client().Get(context.Background(), prefix+"/bindings")
+	html, err := g.Client().Get(context.Background(), prefix+"/admin/bindings")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestAdminSPA(t *testing.T) {
 	if html.StatusCode != http.StatusOK || !strings.Contains(htmlBody, "admin-spa") {
 		t.Fatalf("spa %d %s", html.StatusCode, htmlBody)
 	}
-	js, err := g.Client().Get(context.Background(), prefix+"/assets/app.js")
+	js, err := g.Client().Get(context.Background(), prefix+"/admin/assets/app.js")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,6 +124,54 @@ func TestAdminSPA(t *testing.T) {
 	hzBody := hz.ReadAllString()
 	if hz.StatusCode != http.StatusOK || !strings.Contains(hzBody, `"phase":"2"`) {
 		t.Fatalf("healthz %d %s", hz.StatusCode, hzBody)
+	}
+}
+
+func TestOwnerSPA(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><title>owner-h5</title>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("console.log('owner')"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := g.Server(guid.S())
+	s.SetDumpRouterMap(false)
+	s.SetAccessLogEnabled(false)
+	s.SetErrorLogEnabled(false)
+	Register(s, config.Config{
+		SQLitePath:    ":memory:",
+		TokenKEK:      "test-kek",
+		AdminUser:     "admin",
+		AdminPassword: "secret-pass-xx",
+		OwnerDir:      dir,
+	})
+	s.SetPort(0)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Shutdown() })
+	prefix := "http://127.0.0.1:" + strconv.Itoa(s.GetListenedPort())
+	html, err := g.Client().Get(context.Background(), prefix+"/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer html.Close()
+	htmlBody := html.ReadAllString()
+	if html.StatusCode != http.StatusOK || !strings.Contains(htmlBody, "owner-h5") {
+		t.Fatalf("owner spa %d %s", html.StatusCode, htmlBody)
+	}
+	js, err := g.Client().Get(context.Background(), prefix+"/assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer js.Close()
+	jsBody := js.ReadAllString()
+	if js.StatusCode != http.StatusOK || !strings.Contains(jsBody, "owner") {
+		t.Fatalf("owner asset %d %s", js.StatusCode, jsBody)
 	}
 }
 

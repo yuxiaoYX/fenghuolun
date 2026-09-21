@@ -26,7 +26,7 @@
 - 运行与打包需要 **HBuilderX 5.21+**（Android 蒸汽模式起点）
 - Web / 小程序当前会以 VDOM 跑，官方后续会升蒸汽模式
 - 不要在本工程直连官方云
-- 本服务地址：`common/config.uts` → `API_BASE`（默认 `http://127.0.0.1:8088`）
+- 本服务地址：`common/config.uts` → `API_BASE`。H5 为空（同端口相对路径）；非 H5 默认 `http://127.0.0.1:8088`
 
 `appid` 留空，用 HBuilderX 打开后由 DCloud 分配，不要手写假 appid。
 
@@ -34,13 +34,17 @@ HBuilderX 把本工程当 Vue3 / uni-app x 编译时，**本目录根上必须�
 
 ## 打开
 
-H5 可以不经过 HBuilderX，在仓库根：
+当前产品形态是 **浏览器 H5**，暂不编 App。生产镜像把 H5 和 Go 打在一起：打开 `http://127.0.0.1:8088/` 即车主端，`/admin/login` 是后台。
+
+开发 H5（仓库根）：
 
 ```bash
 pnpm owner:h5
 ```
 
-或 `pwsh -File apps/owner/dev-h5.ps1`。默认 `http://127.0.0.1:5174`（避开 HBuilderX 常用的 5173）。脚本用的是本机 HBuilderX 插件目录里的 `uni` CLI，不是另装一套。
+或 `pwsh -File apps/owner/dev-h5.ps1`。默认 `http://127.0.0.1:5174`（避开管理端 5173）。接口代理到 `8088`。生产包：`pwsh -File apps/owner/build-h5.ps1`（写入 `h5-dist/`，Dockerfile 会 COPY）。
+
+脚本用的是本机 HBuilderX 插件目录里的 `uni` CLI。
 
 - 终端能看到：UTS / Vite 编译错误、启动地址
 - 终端看不到：浏览器里的 `console.log`（仍在开发者工具）

@@ -117,7 +117,7 @@
 	const tapAbout = () => {
 		uni.showModal({
 			title: '关于风火轮',
-			content: '风火轮 · 哪吒 L 车友自制 · 非官方 · 无 OTA。实时依赖官方云。服务端需设置 FENGHUOLUN_TOKEN_KEK。',
+			content: '风火轮 · 哪吒 L 车友自制 · 非官方 · 无车机 OTA。实时依赖官方云。服务端需设置 FENGHUOLUN_TOKEN_KEK。',
 			showCancel: false
 		})
 	}
@@ -249,7 +249,7 @@
 				<view class="row" @click="tapAbout">
 					<view class="row-main">
 						<text class="row-t">关于与免责</text>
-						<text class="row-s">非官方 · 无 OTA · 云停则无法实时同步</text>
+						<text class="row-s">非官方 · 无车机 OTA · 云停则无法实时同步</text>
 					</view>
 					<text class="row-chev">›</text>
 				</view>

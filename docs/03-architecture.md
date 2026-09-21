@@ -8,13 +8,13 @@
 fenghuolun/
   README.md
   LICENSE
-  Dockerfile            生产镜像（Go + 管理端 dist）
+  Dockerfile            生产镜像（Go + 车主 H5 + 管理端 dist）
   docker-compose.yml    克隆后 docker compose up -d
   .env.example          Compose 环境变量模板
   deploy/               install.sh、容器入口
   docs/                 权威文档（本目录）
   apps/
-    owner/              uni-app x 车主前台（蒸汽模式）
+    owner/              uni-app x 车主前台（当前交付 H5）
     admin/              Vue3 + antdv-next 管理员 Web
   server/               GoFrame v2 模块（gf init 结构）
     main.go             gf cmd 入口
@@ -39,7 +39,7 @@ fenghuolun/
 ## 三端职责
 
 ```
-车主 uni-app x          管理员 Vue3 Web
+车主 H5（/）              管理员 Web（/admin/）
    │ 本服务会话                │ 管理员会话
    ▼                          ▼
               Go server
@@ -97,7 +97,7 @@ fenghuolun/
 
 ## 部署形态
 
-- 单机自托管：一个 Go 进程 + 本地 SQLite 文件；生产镜像把管理端 dist 打进同一容器。`docker compose up -d` 即可；admin 开发仍用 Vite 代理；owner 以 App 安装包或连接该 API 的 H5。步骤见 `docs/DEPLOYMENT.md`
+- 单机自托管：一个 Go 进程 + 本地 SQLite 文件；生产镜像把车主 H5 和管理端 dist 打进同一容器。`docker compose up -d` 即可；admin 开发仍用 Vite 代理；车主用浏览器打开 `/`。步骤见 `docs/DEPLOYMENT.md`
 - CORS：空库时从环境变量写入 `app_settings`，之后以后台设置为准；本机 `127.0.0.1` / `localhost` 端口始终放行
 - 不默认公网多租户 SaaS。若同一实例服务多个车主，仍然是「多个 refresh_token 绑定」，不是开放注册社区
 

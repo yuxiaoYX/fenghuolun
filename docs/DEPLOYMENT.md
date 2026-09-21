@@ -1,6 +1,6 @@
 # 部署指南
 
-单进程：Go 后端 + 管理员前端。数据是一个 SQLite 文件。生产用 **GitHub Release**（`v*`）打出来的镜像；`master` / `main` 上的镜像给 CI 和预览。
+单进程：Go 后端 + 车主 H5 + 管理员前端。数据是一个 SQLite 文件。生产用 **GitHub Release**（`v*`）打出来的镜像；`master` / `main` 上的镜像给 CI 和预览。车主前台暂不编 App，浏览器打开即可。
 
 ```text
 ghcr.io/yuxiaoyx/fenghuolun
@@ -44,7 +44,7 @@ bash deploy/init-env.sh          # Windows: pwsh -File deploy/init-env.ps1
 docker compose up -d
 ```
 
-`init-env` 会创建 `.env`（KEK + 首次管理员），并把密码打在屏幕上。浏览器打开 <http://127.0.0.1:8088/login> ，**立刻改密**。
+`init-env` 会创建 `.env`（KEK + 首次管理员），并把密码打在屏幕上。车主打开 <http://127.0.0.1:8088/> ；管理员打开 <http://127.0.0.1:8088/admin/login> ，**立刻改密**。
 
 健康检查：
 
@@ -104,7 +104,7 @@ docker compose down          # 停止，保留 ./data
 FENGHUOLUN_PUBLISH=127.0.0.1:18088:8088
 ```
 
-然后 `docker compose up -d`。管理端走 `https://你的域名/login`。
+然后 `docker compose up -d`。车主走 `https://你的域名/`，管理端走 `https://你的域名/admin/login`。
 
 ---
 
@@ -179,7 +179,7 @@ curl -sSL https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/deploy/in
 
 1. **网站 → 创建网站 → 反向代理**，目标 `http://127.0.0.1:18088`
 2. 申请 Let’s Encrypt，打开「HTTP 跳转到 HTTPS」
-3. 用脚本打印的账号登录 `https://你的域名/login`，立刻改密
+3. 用脚本打印的账号登录 `https://你的域名/admin/login`，立刻改密
 4. 从 `.env.production` 删除 `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` / `PASSWORD` 两行，再执行 `/opt/fenghuolun/deploy/install.sh` 重建容器
 
 镜像私有时，先在 **容器 → 仓库** 登录 `ghcr.io`（GitHub 用户名 + `read:packages` 的 PAT），再跑脚本。
@@ -268,8 +268,9 @@ pnpm --dir apps/admin dev
 - API / healthz：<http://127.0.0.1:8088/healthz>
 - 管理端开发：<http://127.0.0.1:5173> （Vite 把 `/api`、`/healthz` 代理到 Go）
 - 部署本机托管管理端：`pnpm --dir apps/admin build`，再设 `FENGHUOLUN_ADMIN_DIR` 指向 `apps/admin/dist`
+- 部署本机托管车主 H5：`pwsh -File apps/owner/build-h5.ps1`，再设 `FENGHUOLUN_OWNER_DIR` 指向 `apps/owner/h5-dist`
 
-车主前台用 **HBuilderX 5.21+** 打开 `apps/owner`，蒸汽模式见 [`apps/owner/README.md`](../apps/owner/README.md)。
+生产镜像已包含这两份静态文件。开发车主页：`pnpm owner:h5`。见 [`apps/owner/README.md`](../apps/owner/README.md)。
 
 ---
 
@@ -282,6 +283,7 @@ pnpm --dir apps/admin dev
 | `FENGHUOLUN_HTTP_ADDR` | `0.0.0.0:8088` |
 | `FENGHUOLUN_SQLITE_PATH` | `/var/lib/fenghuolun/fenghuolun.db` |
 | `FENGHUOLUN_ADMIN_DIR` | `/app/admin` |
+| `FENGHUOLUN_OWNER_DIR` | `/app/owner` |
 
 你真正要动的是：
 
@@ -312,7 +314,7 @@ pnpm --dir apps/admin dev
 - 证书用 1Panel Let’s Encrypt（HTTP 验证）或下面的 Caddy / Nginx
 - 安全组与防火墙放行 `80` / `443`；不要开放 `8088` 或 `18088`
 
-管理端由 Go **同端口**托管，反代到根路径即可，`/login`、`/api`、`/healthz` 不用拆。
+车主 H5 和管理端由 Go **同端口**托管：`/` 是车主，`/admin/` 是后台。反代到根路径即可，`/api`、`/healthz` 不用拆。
 
 ### 1Panel
 

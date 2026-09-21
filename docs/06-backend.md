@@ -4,10 +4,10 @@
 
 框架：`github.com/gogf/gf/v2`。工程按 `gf init` 脚手架：`server/main.go` + `internal/cmd`。一个进程同时服务：
 
-- `GET /healthz`（`status` / `phase` / `version`）
+- `GET /healthz`（`status` / `phase` / `version`；给探活，不查 GitHub）
 - `/api/v1/owner/*` 车主
 - `/api/v1/admin/*` 管理员
-- 可选托管 `apps/admin` 构建产物（`FENGHUOLUN_ADMIN_DIR` 指向 `dist`，同端口提供 `/` `/login` `/bindings` 等）
+- 可选托管车主 H5（`FENGHUOLUN_OWNER_DIR`，`/`）和管理端（`FENGHUOLUN_ADMIN_DIR`，`/admin/`）
 
 ---
 
@@ -23,13 +23,14 @@
 | `FENGHUOLUN_CORS_ORIGINS` | 空库写入 `app_settings` 的缺省；之后以后台设置为准 |
 | `FENGHUOLUN_CRON_SYNC` | 同上。默认关；如 `15m`。改后台后热替换 gcron，不必重启 |
 | `FENGHUOLUN_NETA_SCALE` | 默认关（续航/电压为 —）。`candidate` 启用 `/10` 并带 decodeWarnings |
-| `FENGHUOLUN_ADMIN_DIR` | 可选。管理端 `pnpm --dir apps/admin build` 的 `dist` 目录。空则不托管，开发用 Vite `:5173` |
+| `FENGHUOLUN_ADMIN_DIR` | 可选。管理端 `pnpm --dir apps/admin build` 的 `dist`。同端口 `/admin/`。空则不托管，开发用 Vite `:5173` |
+| `FENGHUOLUN_OWNER_DIR` | 可选。车主 H5（`pwsh -File apps/owner/build-h5.ps1` 的 `h5-dist`）。同端口 `/`。空则不托管，开发用 `pnpm owner:h5` |
 | `FENGHUOLUN_UPDATE_REPO` | 查 GitHub Release 的 `owner/repo`，默认 `yuxiaoYX/fenghuolun`。设为 `-` 关闭检查 |
 | `FENGHUOLUN_UPDATE_IMAGE` | 拉取的镜像名，默认 `ghcr.io/yuxiaoyx/fenghuolun` |
 | `FENGHUOLUN_CONTAINER_NAME` | 本容器名，默认 `fenghuolun` |
 | `FENGHUOLUN_UPDATE_DISABLE` | `1` 时后台「一点更新」关闭（仍可看版本） |
 
-`HTTP_ADDR` / `SQLITE_PATH` / `TOKEN_KEK` / `ADMIN_DIR` 只在环境变量，后台改不了。`CORS` / `CRON` / 快照保留 / 陈旧阈值在 `app_settings`。会话是随机 ID + 哈希，没有 `SESSION_SECRET`。
+`HTTP_ADDR` / `SQLITE_PATH` / `TOKEN_KEK` / `ADMIN_DIR` / `OWNER_DIR` 只在环境变量，后台改不了。`CORS` / `CRON` / 快照保留 / 陈旧阈值在 `app_settings`。会话是随机 ID + 哈希，没有 `SESSION_SECRET`。
 
 启动时读取 `server/.env`（不覆盖已有进程环境）。密钥只写 `.env`，不要写 `manifest/config/config.yaml`。
 

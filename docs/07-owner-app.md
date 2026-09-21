@@ -11,7 +11,7 @@
   - **不是** 普通 Vite 项目里的 Vue Vapor 实验开关
 - 官方开关（已写入 `apps/owner/manifest.json`）：`uni-app-x.vapor = true`，并设 `styleIsolationVersion: "2"`、`vapor-render-target: "bytecode"`。HBuilderX 可视化首页也可勾选「蒸汽模式」。说明：[蒸汽模式](https://doc.dcloud.net.cn/uni-app-x/app-vapor.html)
 - 仅组合式 API；文字必须包在 `<text>` 内；需要 **HBuilderX 5.21+**
-- 目标端优先级：App-Android → App-iOS → H5。H5 目前按官方说明以 VDOM 运行
+- 当前交付：**H5**（浏览器，与 Go 同端口 `/`）。App / 小程序暂不做。H5 按官方说明以 VDOM 运行
 - 禁止：把已删除的根目录 `src/*.vue` 复制进来；禁止在前台实现官方签名与换票
 
 ## 信息架构
@@ -51,7 +51,7 @@
 
 ## 与后端
 
-- 基础 URL：`apps/owner/common/config.uts` 的 `API_BASE`（开发默认 `http://127.0.0.1:8088`；Android 模拟器改 `http://10.0.2.2:8088`）
+- H5 的 `API_BASE` 为空，请求相对路径 `/api`、`/healthz`（开发 `pnpm owner:h5` 把它们代理到 `:8088`）
 - 只调用 `docs/06-backend.md` 的 owner API
 - UTS 网络层统一处理 `ok/error.code`
 - `token_invalid` → 拉回绑定页
@@ -85,4 +85,4 @@ uni-app x 的 ucss 不能用 `linear-gradient` / `grid` / `::before`，实现时
 - 「车况 / 能耗 / 电池 / 我的」都有同步于或上次同步（车况完整时间在更多读数）
 - 远程与车控全部灰色占位，点击只 toast「尚未开通」，不发车控
 - 主按钮 / 图标按钮 / 列表项 `min-height` ≥ 44px
-- 真机蒸汽模式须用 HBuilderX 打开 `apps/owner` 运行到 App；H5 是 VDOM
+- 交付以 H5 为准（`pnpm owner:h5` / 生产镜像根路径）。HBuilderX 仅用于编译 H5 生产包

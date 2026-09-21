@@ -1,6 +1,6 @@
 # 管理员后台
 
-路径：`apps/admin`。Vue 3 + Vite + TypeScript + **antdv-next 1.5.x**。只给管理员用。不是第二套车主 App。开发用 Vite `:5173`；部署可把 `dist` 交给 Go（`FENGHUOLUN_ADMIN_DIR`）。
+路径：`apps/admin`。Vue 3 + Vite + TypeScript + **antdv-next 1.5.x**。只给管理员用。不是第二套车主 App。开发用 Vite `:5173`（`/login`）；生产 `dist` 交给 Go（`FENGHUOLUN_ADMIN_DIR`），挂在 **`/admin/`**（`/admin/login`）。车主 H5 占 `/`。
 
 ## 谁能进
 
@@ -13,8 +13,8 @@
 
 | 路由 | 职责 |
 |---|---|
-| `/login` | 用户名密码 |
-| `/` | 总览：绑定数、今日同步成功/失败、凭证失效、上游连续失败 |
+| `/login`（生产 `/admin/login`） | 用户名密码 |
+| `/`（生产 `/admin/`） | 总览：绑定数、今日同步成功/失败、凭证失效、上游连续失败 |
 | `/bindings` | 绑定表：车型、脱敏 VIN、状态、最近同步；停用 / 恢复 / 立即同步 |
 | `/bindings/:id` | 详情：脱敏元数据、凭证有/无、最近快照字段、任务；无凭证明文、无完整官方响应 |
 | `/jobs` | 同步任务历史（追加日志，不是一车一行） |

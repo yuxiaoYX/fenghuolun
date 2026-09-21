@@ -21,7 +21,7 @@ bash deploy/init-env.sh          # Windows: pwsh -File deploy/init-env.ps1
 docker compose up -d
 ```
 
-`init-env` 会打印首次管理员密码（也写入 `.env`）。打开 <http://127.0.0.1:8088/login> ，登录后立刻改密。
+`init-env` 会打印首次管理员密码（也写入 `.env`）。车主打开 <http://127.0.0.1:8088/> ；管理员打开 <http://127.0.0.1:8088/admin/login> ，登录后立刻改密。
 
 健康检查：`curl -fsS http://127.0.0.1:8088/healthz`（应含 `phase=2`）。
 
@@ -101,9 +101,9 @@ pnpm --dir apps/admin install
 pnpm --dir apps/admin dev
 ```
 
-浏览器打开终端里的 `http://127.0.0.1:5173`。先起后端。登录后是总览 / 绑定 / 任务 / 数据 / 设置 / 账号，不是一张总览表。部署时可 `pnpm --dir apps/admin build`，再设 `FENGHUOLUN_ADMIN_DIR` 指向 `apps/admin/dist`，由 Go 同端口托管（`/login` `/bindings` 等）。
+浏览器打开终端里的 `http://127.0.0.1:5173`。先起后端。登录后是总览 / 绑定 / 任务 / 数据 / 设置 / 账号，不是一张总览表。部署时 `pnpm --dir apps/admin build`，Go 托管在 `/admin/`。
 
-车主前台：用 **HBuilderX 5.21+** 打开 `apps/owner`，确认蒸汽模式已勾选（`manifest.json` 里 `uni-app-x.vapor: true`）。运行与打包见 [`apps/owner/README.md`](apps/owner/README.md)。
+车主前台当前按 **H5** 用（暂不编 App）。开发：`pnpm owner:h5` → `http://127.0.0.1:5174`。生产打进镜像，浏览器打开服务根路径即可。HBuilderX 仅在要改 uvue 编译时报错时需要，见 [`apps/owner/README.md`](apps/owner/README.md)。
 
 `*.har` 已被 gitignore。本地 `1.har` 含账号与钥匙材料，禁止提交。
 

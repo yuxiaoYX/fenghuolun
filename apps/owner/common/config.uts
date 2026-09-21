@@ -1,1 +1,7 @@
+// H5 与后端同端口，走相对路径。非 H5（以后若再编 App）仍打本机后端。
+// #ifdef H5
+export const API_BASE : string = ''
+// #endif
+// #ifndef H5
 export const API_BASE : string = 'http://127.0.0.1:8088'
+// #endif

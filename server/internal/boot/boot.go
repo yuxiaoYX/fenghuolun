@@ -51,6 +51,7 @@ func Register(s *ghttp.Server, cfg config.Config) *ownersvc.Service {
 	if err := ownersvc.StartCron(context.Background(), cfg, svc); err != nil {
 		panic(err)
 	}
+	registerOwnerSPA(s, cfg.OwnerDir)
 	registerAdminSPA(s, cfg.AdminDir)
 	return svc
 }

@@ -36,11 +36,13 @@ RUN apt-get update \
 ENV TZ=Asia/Shanghai \
     FENGHUOLUN_HTTP_ADDR=0.0.0.0:8088 \
     FENGHUOLUN_SQLITE_PATH=/var/lib/fenghuolun/fenghuolun.db \
-    FENGHUOLUN_ADMIN_DIR=/app/admin
+    FENGHUOLUN_ADMIN_DIR=/app/admin \
+    FENGHUOLUN_OWNER_DIR=/app/owner
 
 WORKDIR /app
 COPY --from=server-build /out/fenghuolun /app/fenghuolun
 COPY --from=admin-build /src/apps/admin/dist /app/admin
+COPY apps/owner/h5-dist /app/owner
 COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh \
     && mkdir -p /var/lib/fenghuolun

@@ -12,6 +12,7 @@ type Config struct {
 	ScaleCandidate bool
 	CronSync       string
 	AdminDir       string
+	OwnerDir       string
 }
 
 func Load() Config {
@@ -27,6 +28,7 @@ func Load() Config {
 		ScaleCandidate: scale == "candidate",
 		CronSync:       os.Getenv("FENGHUOLUN_CRON_SYNC"),
 		AdminDir:       os.Getenv("FENGHUOLUN_ADMIN_DIR"),
+		OwnerDir:       os.Getenv("FENGHUOLUN_OWNER_DIR"),
 	}
 }
 

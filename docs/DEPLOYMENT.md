@@ -4,47 +4,74 @@
 
 生产只吃 **GitHub Release**（`v*` 标签）。`master` / `main` 上的镜像给 CI 和预览，不要用在这台生产机上。
 
+## 一键部署（推荐）
+
+1Panel **终端**（或任意已装 Docker 的 Linux）执行：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/deploy/install.sh | bash -s -- --domain https://你的域名
+```
+
+没有域名可以先不加 `--domain`。脚本会：
+
+1. 创建 `/opt/fenghuolun/{deploy,data,backups}`
+2. 写入 `docker-compose.yml`
+3. 生成 `FENGHUOLUN_TOKEN_KEK` 和首次管理员密码（密码打印在屏幕，并写入 `deploy/admin-bootstrap.txt`）
+4. 拉取 `ghcr.io/yuxiaoyx/fenghuolun:latest` 并启动
+5. 检查 `http://127.0.0.1:18088/healthz`
+
+容器只监听本机 `127.0.0.1:18088`。接着在 1Panel 做域名和证书：
+
+1. **网站 → 创建网站 → 反向代理**，目标 `http://127.0.0.1:18088`
+2. 申请 Let’s Encrypt，打开「HTTP 跳转到 HTTPS」
+3. 用脚本打印的账号登录 `https://你的域名/login`，立刻改密
+4. 从 `.env.production` 删除 `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` / `PASSWORD` 两行，再执行 `/opt/fenghuolun/deploy/install.sh` 重建容器
+
+镜像若是私有的，先在 **容器 → 仓库** 登录 `ghcr.io`（GitHub 用户名 + `read:packages` 的 PAT），再跑脚本。不要把 PAT 写进 `.env.production`。
+
+升级（只在打了新的 `v*` 之后才会有新 `latest`）：
+
+```bash
+/opt/fenghuolun/deploy/install.sh upgrade
+```
+
+1Panel **计划任务** 把上面这一行设成每 6 小时即可，不必手写 `docker compose`。
+
+回滚：
+
+```bash
+cd /opt/fenghuolun/deploy
+IMAGE_TAG=v0.1.0 docker compose up -d
+```
+
+卸载（默认保留库和密钥）：
+
+```bash
+/opt/fenghuolun/deploy/install.sh uninstall
+```
+
 ## 服务器目录
 
 ```text
-/opt/fenghuolun/deploy   docker-compose.yml 与 .env.production
+/opt/fenghuolun/deploy   docker-compose.yml、.env.production、install.sh
 /opt/fenghuolun/data     SQLite 数据库
-/opt/fenghuolun/backups  备份
+/opt/fenghuolun/backups  升级前备份
 ```
 
 不必把整个 git 仓库放到运行目录。
 
-## 1Panel / Compose
+## 手动编排
 
-1. 将 `docker-compose.yml` 放到 `/opt/fenghuolun/deploy`。
-2. 复制 `.env.production.example` 为 `.env.production`。
-3. 填写 `FENGHUOLUN_TOKEN_KEK` 和正式 HTTPS 域名的 `FENGHUOLUN_CORS_ORIGINS`。
-4. 首次空库启动时可临时填写管理员引导账号和密码；登录并修改密码后删除这两个变量，再重建容器。
-5. 在 1Panel **容器 → 编排** 用「路径选择」导入 `/opt/fenghuolun/deploy` 并启动。不要设 `IMAGE_TAG`，默认就是 `latest`。
-
-Compose 只把容器端口绑定到本机：`127.0.0.1:18088`。外部流量由 1Panel/OpenResty 反向代理到该端口。不要把 `18088` 或 `8088` 映射到公网。
-
-第一次 `docker compose pull` 之前，仓库里必须已经有至少一个 `v*` 标签构建成功，否则 `latest` 还不存在。
-
-命令行等价操作：
-
-```bash
-cd /opt/fenghuolun/deploy
-docker compose pull
-docker compose up -d --remove-orphans
-curl http://127.0.0.1:18088/healthz
-```
-
-应返回含 `phase=2` 的响应。
+不走脚本时：把仓库根目录的 `docker-compose.yml` 放到 `/opt/fenghuolun/deploy`，复制 `.env.production.example` 为 `.env.production`，填写 KEK 与 CORS，1Panel **容器 → 编排** 用「路径选择」导入该目录。不要设 `IMAGE_TAG`，默认就是 `latest`。不要把 `18088` 或 `8088` 映射到公网。
 
 ## HTTPS
 
 当前默认（域名和机器都在腾讯云）：
 
 - DNS 的 A 记录指向服务器公网 IP。
-- 1Panel 创建 **反向代理** 网站，目标 `http://127.0.0.1:18088`。
-- 证书用 1Panel Let’s Encrypt（HTTP 验证），打开「HTTP 跳转到 HTTPS」。
-- 腾讯云安全组与 1Panel 防火墙放行 `80` / `443`；不要开放 `8088` 或 `18088`。
+- 1Panel 反向代理目标 `http://127.0.0.1:18088`。
+- 证书用 1Panel Let’s Encrypt（HTTP 验证）。
+- 安全组与 1Panel 防火墙放行 `80` / `443`；不要开放 `8088` 或 `18088`。
 
 以后若把源站换到香港并启用 Cloudflare：DNS 交给 Cloudflare，橙云代理，源站用 Origin 证书，SSL/TLS 选 `Full (strict)`。80/443 最好只允许 Cloudflare IP 段。不要用 Flexible。
 
@@ -63,48 +90,15 @@ ghcr.io/yuxiaoyx/fenghuolun
 
 `latest` 只在 `v*` 标签构建时移动，默认分支推送不会改它。
 
-工作流使用仓库自带的 `GITHUB_TOKEN`，不需要额外配置 Docker Hub 密钥。
-
-如果 GHCR 包是私有的，在 1Panel **容器 → 仓库** 添加 `ghcr.io`，或在服务器上用只有 `read:packages` 权限的 GitHub PAT 登录一次：
-
-```bash
-echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u yuxiaoYX --password-stdin
-```
-
-不要把 PAT 写入仓库或 `.env.production`。
+工作流使用仓库自带的 `GITHUB_TOKEN`。私有包登录方式见上文一键部署。
 
 ## 发版
 
 `master` 随时合。要上生产时打标签（不要用带连字符的预发布名，除非你有意让它成为 `latest`）：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-需要说明时再 `gh release create v0.1.0 --notes "…"`。等 Actions 把 `latest` 推上去之后，生产机才会拉到这一版。
-
-## 更新与回滚
-
-1Panel **计划任务** 用 Shell 定时拉 `latest`（合 PR 不会触发；发版后可「立即执行」）：
-
-```bash
-set -euo pipefail
-cd /opt/fenghuolun/deploy
-mkdir -p /opt/fenghuolun/backups
-ts=$(date +%Y%m%d%H%M%S)
-cp -a /opt/fenghuolun/data "/opt/fenghuolun/backups/pre-update-$ts"
-docker compose pull
-docker compose up -d --remove-orphans
-curl -fsS http://127.0.0.1:18088/healthz | grep -q phase
-```
-
-另做每日目录备份：`/opt/fenghuolun/data` 和 `.env.production`，保留若干份。不要用 1Panel 缓存清理把旧镜像全删掉。
-
-回滚时在编排环境变量里钉死上一版，再执行同样的 pull / up：
-
-```text
-IMAGE_TAG=v0.1.0
-```
-
-去掉 `IMAGE_TAG` 则回到跟随 `latest`。密钥和 SQLite 永远不放入镜像。
+等 Actions 把 `latest` 推上去之后，生产机执行 `install.sh upgrade` 才会拉到这一版。

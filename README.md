@@ -27,11 +27,27 @@
 1. [`docs/HANDOFF.md`](docs/HANDOFF.md)
 2. [`docs/02-decisions.md`](docs/02-decisions.md)
 3. [`docs/README.md`](docs/README.md)
-4. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — 1Panel / Docker 生产部署
+4. [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — 生产一键部署（1Panel / Docker）
 
 抓包附录只留本机 `docs/HAR-ANALYSIS.md`（已 gitignore，不进仓库）。
 
-## 怎么跑
+## 生产（一键）
+
+1Panel 打开 **终端**，贴这一行（有域名把地址换上）：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/yuxiaoYX/fenghuolun/master/deploy/install.sh | bash -s -- --domain https://你的域名
+```
+
+脚本会建目录、生成密钥和管理员密码、拉 `latest` 镜像并启动。然后在 1Panel **网站 → 反向代理** 指到 `http://127.0.0.1:18088`，再开 Let’s Encrypt。升级：
+
+```bash
+/opt/fenghuolun/deploy/install.sh upgrade
+```
+
+说明见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。镜像私有时先在 **容器 → 仓库** 登录 `ghcr.io`。
+
+## 怎么跑（开发）
 
 后端（在 `server/` 下会读本目录 `.env`，已 gitignore；进程环境变量优先）：
 
@@ -65,6 +81,7 @@ pnpm --dir apps/admin dev
 apps/owner     车主 uni-app x（蒸汽模式）
 apps/admin     管理员 Web（antdv-next）
 server         Go
+deploy         生产一键安装脚本
 testdata/neta  解码单测用的脱敏官方响应样例
 docs           权威文档
 ```

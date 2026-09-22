@@ -67,6 +67,6 @@
 - [x] 任务历史含 `running` / 成功 / 失败；失败可看脱敏 `errorInternal`
 - [x] 数据页时间为北京时间墙钟，无密文列、无完整 VIN
 - [x] 非法 cron 不留下错误配置；改密作废其它管理员会话
-- [x] 设置页可检查 GitHub Release；容器且挂了 docker.sock 时可一点更新到最新 `v*` 镜像
+- [x] 设置页可检查 GitHub Release；容器内可一点更新到最新 `v*` 程序包（数据卷 + 自动重启）。没有程序包且挂了 docker.sock 时才拉镜像重建
 
 未做（有意）：车控、地图、SQL、导出、完整 VIN、token 明文、多管理员账号体系。

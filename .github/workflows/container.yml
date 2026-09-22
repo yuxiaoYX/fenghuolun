@@ -73,8 +73,34 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Set up pnpm
+        if: github.ref_type == 'tag'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        if: github.ref_type == 'tag'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Build admin
+        if: github.ref_type == 'tag'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir apps/admin build
+
+      - name: Pack release bundles
+        if: github.ref_type == 'tag'
+        run: bash deploy/pack-release.sh "${{ github.ref_name }}" "${{ github.sha }}"
+
       - name: Publish GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          files: |
+            dist/release/fenghuolun_*_linux_*.tar.gz
+            dist/release/SHA256SUMS

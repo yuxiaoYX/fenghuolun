@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ type Status struct {
 	InDocker        bool   `json:"inDocker"`
 	DockerAvailable bool   `json:"dockerAvailable"`
 	CanApply        bool   `json:"canApply"`
+	Mode            string `json:"mode,omitempty"`
 	Updating        bool   `json:"updating"`
 	Target          string `json:"target,omitempty"`
 	Image           string `json:"image,omitempty"`
@@ -52,11 +54,12 @@ func Probe(ctx context.Context, forceLatest bool) Status {
 		st.DockerAvailable = true
 	}
 
-	rel, err := LatestRelease(forceLatest)
-	if err != nil {
-		if st.Hint == "" {
-			st.Hint = "查不到 GitHub Release：" + err.Error()
-		}
+	var rel Release
+	var relErr error
+	rel, relErr = LatestRelease(forceLatest)
+	githubHint := ""
+	if relErr != nil {
+		githubHint = "查不到 GitHub Release：" + relErr.Error()
 	} else {
 		st.Latest = rel.Tag
 		st.LatestURL = rel.URL
@@ -64,49 +67,57 @@ func Probe(ctx context.Context, forceLatest bool) Status {
 		st.UpdateAvailable = CompareTags(rel.Tag, st.Version) > 0
 	}
 
-	if flag, ok := readProgress(sqliteDirHint()); ok {
+	dataDir := sqliteDirHint()
+	if flag, ok := readProgress(dataDir); ok {
 		if flag.Target != "" && CompareTags(st.Version, flag.Target) >= 0 && IsReleaseTag(st.Version) {
 			clearProgress("")
+			clearUpdateError("")
 		} else {
 			st.Updating = true
 			st.Target = flag.Target
 		}
 	}
-
-	switch {
-	case st.Hint != "" && strings.Contains(st.Hint, "FENGHUOLUN_UPDATE_DISABLE"):
-		st.CanApply = false
-	case !st.UpdateAvailable:
-		st.CanApply = false
-		if st.Latest != "" && st.Hint == "" {
-			st.Hint = "已是最新版 " + st.Latest
-		}
-	case !st.DockerAvailable:
-		st.CanApply = false
-		if st.Hint == "" {
-			st.Hint = "未挂载 Docker 套接字，无法在后台一点更新。把 /var/run/docker.sock 挂进容器，或在宿主机执行：docker compose pull && docker compose up -d"
-		}
-	case !st.InDocker:
-		st.CanApply = false
-		if st.Hint == "" {
-			st.Hint = "当前不是容器进程（本地 go run / 源码）。请用 Docker Compose 部署后再用后台更新，或在宿主机：docker compose pull && docker compose up -d"
-		}
-	default:
-		if _, err := inspectSelf(ctx); err != nil {
-			st.CanApply = false
-			if st.Hint == "" {
-				st.Hint = "Docker 可用，但找不到本容器。给容器名 fenghuolun，或设 FENGHUOLUN_CONTAINER_NAME。"
-			}
-		} else {
-			st.CanApply = true
-			if st.Hint == "" {
-				st.Hint = "将备份数据库、拉取 " + st.Image + " 并重建本容器。页面会短暂不可用。"
+	failure := ""
+	if !st.Updating {
+		if errFile, ok := readUpdateError(dataDir); ok {
+			if errFile.Target != "" && CompareTags(st.Version, errFile.Target) >= 0 && IsReleaseTag(st.Version) {
+				clearUpdateError("")
+			} else {
+				failure = "更新失败：" + errFile.Error
 			}
 		}
 	}
-	if st.Updating {
-		st.CanApply = false
-		st.Hint = "正在更新到 " + st.Target + "，请稍候，不要重复点击。"
+
+	_, _, bundleReady := selectBundle(rel.Tag, rel.Assets, runtime.GOOS, runtime.GOARCH)
+	selfOK := false
+	if st.DockerAvailable && st.InDocker && !bundleReady {
+		if _, err := inspectSelf(ctx); err == nil {
+			selfOK = true
+		}
+	}
+	can, mode, hint := decideApply(applyInput{
+		Disabled:        strings.TrimSpace(os.Getenv("FENGHUOLUN_UPDATE_DISABLE")) == "1",
+		UpdateAvailable: st.UpdateAvailable,
+		Latest:          st.Latest,
+		Image:           st.Image,
+		BundleReady:     bundleReady && relErr == nil,
+		ReleaseBuild:    IsReleaseTag(st.Version),
+		InDocker:        st.InDocker,
+		DockerReady:     st.DockerAvailable,
+		SelfOK:          selfOK,
+		Updating:        st.Updating,
+		Target:          st.Target,
+		Failure:         failure,
+	})
+	st.CanApply = can
+	st.Mode = mode
+	switch {
+	case strings.TrimSpace(os.Getenv("FENGHUOLUN_UPDATE_DISABLE")) == "1" || st.Updating:
+		st.Hint = hint
+	case githubHint != "" && !st.UpdateAvailable:
+		st.Hint = githubHint
+	case hint != "":
+		st.Hint = hint
 	}
 	return st
 }
@@ -126,13 +137,22 @@ func StartApply(ctx context.Context, sqlitePath string) (ApplyResult, error) {
 	applyMu.Unlock()
 
 	target := st.Latest
+	mode := st.Mode
 	image := ImageRef(target)
+	rel, err := LatestRelease(false)
+	if err != nil && mode == "bundle" {
+		applyMu.Lock()
+		busy = false
+		applyMu.Unlock()
+		return ApplyResult{}, fmt.Errorf("github: %w", err)
+	}
 	if _, err := BackupSQLite(sqlitePath); err != nil {
 		applyMu.Lock()
 		busy = false
 		applyMu.Unlock()
 		return ApplyResult{}, fmt.Errorf("backup sqlite: %w", err)
 	}
+	clearUpdateError(sqlitePath)
 	writeProgress(sqlitePath, target)
 
 	go func() {
@@ -143,9 +163,21 @@ func StartApply(ctx context.Context, sqlitePath string) (ApplyResult, error) {
 		}()
 		bg, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 		defer cancel()
-		if err := launchHelper(bg, image); err != nil {
+		var runErr error
+		if mode == "bundle" {
+			runErr = applyBundle(bg, dataDirFromSQLite(sqlitePath), rel, runtime.GOOS, runtime.GOARCH)
+		} else {
+			runErr = launchHelper(bg, image)
+		}
+		if runErr != nil {
 			clearProgress(sqlitePath)
-			fmt.Fprintf(os.Stderr, "[fenghuolun] update helper failed: %v\n", err)
+			writeUpdateError(sqlitePath, target, runErr.Error())
+			fmt.Fprintf(os.Stderr, "[fenghuolun] update failed: %v\n", runErr)
+			return
+		}
+		if mode == "bundle" {
+			fmt.Fprintf(os.Stderr, "[fenghuolun] bundle %s installed, restarting\n", target)
+			exitProcess(0)
 		}
 	}()
 
@@ -266,6 +298,53 @@ func writeProgress(sqlitePath, target string) {
 
 func clearProgress(sqlitePath string) {
 	_ = os.Remove(progressPath(sqlitePath))
+}
+
+func dataDirFromSQLite(sqlitePath string) string {
+	if sqlitePath != "" && sqlitePath != ":memory:" {
+		return filepath.Dir(sqlitePath)
+	}
+	return sqliteDirHint()
+}
+
+type updateErrorFile struct {
+	Target string `json:"target"`
+	Error  string `json:"error"`
+	At     int64  `json:"at"`
+}
+
+func updateErrorPath(sqlitePath string) string {
+	return filepath.Join(dataDirFromSQLite(sqlitePath), "update-last-error.json")
+}
+
+func writeUpdateError(sqlitePath, target, msg string) {
+	msg = strings.TrimSpace(msg)
+	if len(msg) > 300 {
+		msg = msg[:300]
+	}
+	p := updateErrorPath(sqlitePath)
+	_ = os.MkdirAll(filepath.Dir(p), 0o700)
+	b, _ := json.Marshal(updateErrorFile{Target: target, Error: msg, At: time.Now().Unix()})
+	_ = os.WriteFile(p, b, 0o600)
+}
+
+func clearUpdateError(sqlitePath string) {
+	_ = os.Remove(updateErrorPath(sqlitePath))
+}
+
+func readUpdateError(dir string) (updateErrorFile, bool) {
+	b, err := os.ReadFile(filepath.Join(dir, "update-last-error.json"))
+	if err != nil {
+		return updateErrorFile{}, false
+	}
+	var f updateErrorFile
+	if json.Unmarshal(b, &f) != nil || f.Error == "" {
+		return updateErrorFile{}, false
+	}
+	if f.At > 0 && time.Since(time.Unix(f.At, 0)) > 30*time.Minute {
+		return updateErrorFile{}, false
+	}
+	return f, true
 }
 
 func readProgress(dir string) (progressFile, bool) {

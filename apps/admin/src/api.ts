@@ -202,6 +202,7 @@ export type SystemInfo = {
   inDocker: boolean
   dockerAvailable: boolean
   canApply: boolean
+  mode?: string
   updating: boolean
   target?: string
   image?: string

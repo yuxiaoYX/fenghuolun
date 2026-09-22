@@ -2,8 +2,8 @@
 	"name": "风火轮",
 	"appid": "",
 	"description": "风火轮 · 哪吒 L 车主前台",
-	"versionName": "0.1.3",
-	"versionCode": 103,
+	"versionName": "0.1.4",
+	"versionCode": 104,
 	"vueVersion": "3",
 	"uni-app-x": {
 		"flex-direction": "column",

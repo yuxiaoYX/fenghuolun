@@ -49,4 +49,22 @@ EOF
 	fi
 fi
 
+# 后台一点更新把新版本放在数据库所在目录。容器重启后跑这一份，不依赖 Docker 套接字。
+APP_ROOT="$DATA_DIR"
+if [ -n "${FENGHUOLUN_SQLITE_PATH:-}" ] && [ "$FENGHUOLUN_SQLITE_PATH" != ":memory:" ]; then
+	APP_ROOT=$(dirname "$FENGHUOLUN_SQLITE_PATH")
+fi
+APP_DIR="$APP_ROOT/app/current"
+if [ -x "$APP_DIR/fenghuolun" ]; then
+	if [ -d "$APP_DIR/admin" ]; then
+		FENGHUOLUN_ADMIN_DIR="$APP_DIR/admin"
+		export FENGHUOLUN_ADMIN_DIR
+	fi
+	if [ -d "$APP_DIR/owner" ]; then
+		FENGHUOLUN_OWNER_DIR="$APP_DIR/owner"
+		export FENGHUOLUN_OWNER_DIR
+	fi
+	exec "$APP_DIR/fenghuolun" "$@"
+fi
+
 exec /app/fenghuolun "$@"

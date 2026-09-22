@@ -29,6 +29,7 @@
 | `FENGHUOLUN_UPDATE_IMAGE` | 拉取的镜像名，默认 `ghcr.io/yuxiaoyx/fenghuolun` |
 | `FENGHUOLUN_CONTAINER_NAME` | 本容器名，默认 `fenghuolun` |
 | `FENGHUOLUN_UPDATE_DISABLE` | `1` 时后台「一点更新」关闭（仍可看版本） |
+| `FENGHUOLUN_DOCKER_SOCK` | 仅旧的镜像重建要连的套接字，默认 `/var/run/docker.sock`。程序包更新不用 |
 
 `HTTP_ADDR` / `SQLITE_PATH` / `TOKEN_KEK` / `ADMIN_DIR` / `OWNER_DIR` 只在环境变量，后台改不了。`CORS` / `CRON` / 快照保留 / 陈旧阈值在 `app_settings`。会话是随机 ID + 哈希，没有 `SESSION_SECRET`。
 

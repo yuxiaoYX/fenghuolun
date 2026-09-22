@@ -108,6 +108,7 @@ services:
       - "127.0.0.1:18088:8088"
     volumes:
       - /opt/fenghuolun/data:/var/lib/fenghuolun
+      # 一点更新不需要套接字。没有程序包时才会用它拉镜像，可以删掉。
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/healthz"]

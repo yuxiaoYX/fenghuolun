@@ -173,6 +173,7 @@ type SystemRes struct {
 	InDocker        bool   `json:"inDocker"`
 	DockerAvailable bool   `json:"dockerAvailable"`
 	CanApply        bool   `json:"canApply"`
+	Mode            string `json:"mode,omitempty"`
 	Updating        bool   `json:"updating"`
 	Target          string `json:"target,omitempty"`
 	Image           string `json:"image,omitempty"`
@@ -180,7 +181,7 @@ type SystemRes struct {
 }
 
 type SystemUpdateReq struct {
-	g.Meta `path:"/system/update" method:"post" tags:"Admin" summary:"拉取最新 Release 镜像并重建本容器"`
+	g.Meta `path:"/system/update" method:"post" tags:"Admin" summary:"下载最新 Release 程序包并重启，或在无程序包时重建容器"`
 }
 
 type SystemUpdateRes struct {

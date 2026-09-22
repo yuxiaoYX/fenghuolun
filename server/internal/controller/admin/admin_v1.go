@@ -148,6 +148,7 @@ func (c *ControllerV1) System(ctx context.Context, req *v1.SystemReq) (res *v1.S
 		InDocker:        st.InDocker,
 		DockerAvailable: st.DockerAvailable,
 		CanApply:        st.CanApply,
+		Mode:            st.Mode,
 		Updating:        st.Updating,
 		Target:          st.Target,
 		Image:           st.Image,

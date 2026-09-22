@@ -361,15 +361,17 @@ server {
 
 ### 管理后台一点更新（推荐）
 
-Compose 默认挂了 `/var/run/docker.sock`。管理员登录 → **设置 → 系统更新 → 检查更新 / 更新到最新版**。会：
+不需要挂载 `/var/run/docker.sock`。容器要有 `restart: unless-stopped`（Compose 和 `docker run` 示例都有），数据卷要在。管理员登录 → **设置 → 系统更新 → 检查更新 / 更新到最新版**。会：
 
 1. 把 SQLite 拷到数据目录 `backups/`
-2. 拉取最新 GitHub `v*` Release 对应的 GHCR 镜像
-3. 重建名为 `fenghuolun` 的容器（数据卷、环境变量保留）
+2. 从 GitHub Release 下载当前架构的程序包（二进制、管理端、车主页），并核对 `SHA256SUMS`
+3. 写到数据卷 `app/current/`，进程退出。Docker 拉起同一个容器，入口改跑这一份
 
-页面会断几秒到一两分钟。登录态还在。第一次用这个功能前，当前跑着的镜像必须已经包含「后台更新」（本仓库这次改动之后的 Release）；更老的 `v0.1.0` 请先在宿主机 `docker compose pull && docker compose up -d` 一次。
+页面会断几秒到一两分钟。登录态还在。基础镜像里的系统包不会跟着换；那种情况仍用下面的命令行升级。
 
-不想给容器 Docker 权限：从 `docker-compose.yml` 删掉 `docker.sock` 那一行。设置页仍会显示版本，并提示用下面的命令升级。
+已经在跑、镜像里还没有这段逻辑的服务器，要先在宿主机执行一次 `docker compose pull && docker compose up -d`。从下一个带程序包的 Release 起，就可以在后台点。
+
+某个 Release 还没上传程序包时，如果容器挂了 `docker.sock`，会退回旧办法：拉 GHCR 镜像并重建容器。不挂套接字就只显示版本，并提示用命令行。`docker-compose.yml` 里的套接字那一行可以删。
 
 `FENGHUOLUN_UPDATE_DISABLE=1` 可关掉一点更新。
 
@@ -471,8 +473,8 @@ docker rm -f fenghuolun
 | 端口占用 | `.env` 里改 `FENGHUOLUN_PUBLISH=8089:8088` |
 | Windows 下 bash 脚本跑不了 | `pwsh -File deploy/init-env.ps1`，再 `docker compose up -d` |
 | `latest` 不是你刚合的 master | 生产 `latest` 只在打 `v*` 标签时移动 |
-| 设置里「更新到最新版」是灰的 | 不是容器、没挂 docker.sock、或已是最新。看该卡片提示；或宿主机 `docker compose pull && docker compose up -d` |
-| 点了更新一直转圈 | 看 `docker logs fenghuolun-updater` 和 `docker logs fenghuolun`。镜像私有时先在宿主机 `docker login ghcr.io` |
+| 设置里「更新到最新版」是灰的 | 不是容器、已是最新，或这个 Release 还没有程序包。看该卡片提示；或宿主机 `docker compose pull && docker compose up -d` |
+| 点了更新一直转圈 | 看 `docker logs fenghuolun` 和数据目录 `update-last-error.json`。旧的镜像重建方式才有 `fenghuolun-updater` |
 
 容器已启动但本机访问失败时，确认映射：
 

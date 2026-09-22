@@ -24,7 +24,8 @@ services:
       - "${FENGHUOLUN_PUBLISH:-8088:8088}"
     volumes:
       - ${FENGHUOLUN_DATA_DIR:-./data}:/var/lib/fenghuolun
-      # 后台「一点更新」需要。不想给容器 Docker 权限就删掉这一行。
+      # 一点更新不需要这一行：程序包写到数据卷后，容器自己重启。
+      # 仅当某个 Release 没有程序包、仍要容器自己拉镜像时才有用。不想给容器 Docker 权限就删掉。
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/healthz"]

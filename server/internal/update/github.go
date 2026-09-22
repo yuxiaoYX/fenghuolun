@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -15,19 +16,33 @@ const defaultRepo = "yuxiaoYX/fenghuolun"
 
 var githubAPI = "https://api.github.com"
 
+type ReleaseAsset struct {
+	Name string
+	URL  string
+	Size int64
+}
+
 type Release struct {
 	Tag     string
 	URL     string
 	Notes   string
+	Assets  []ReleaseAsset
 	Fetched time.Time
 }
 
-type githubLatest struct {
-	TagName    string `json:"tag_name"`
-	HTMLURL    string `json:"html_url"`
-	Body       string `json:"body"`
-	Prerelease bool   `json:"prerelease"`
-	Draft      bool   `json:"draft"`
+type githubAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
+}
+
+type githubRelease struct {
+	TagName    string        `json:"tag_name"`
+	HTMLURL    string        `json:"html_url"`
+	Body       string        `json:"body"`
+	Prerelease bool          `json:"prerelease"`
+	Draft      bool          `json:"draft"`
+	Assets     []githubAsset `json:"assets"`
 }
 
 type githubTag struct {
@@ -93,7 +108,7 @@ func fetchLatest() (Release, error) {
 	notes := map[string]string{}
 	urls := map[string]string{}
 
-	rel, relErr := getJSON[githubLatest](githubAPI + "/repos/" + repo + "/releases/latest")
+	rel, relErr := getJSON[githubRelease](githubAPI + "/repos/" + repo + "/releases/latest")
 	if relErr == nil && !rel.Draft && !rel.Prerelease && IsReleaseTag(rel.TagName) {
 		tag := NormalizeTag(rel.TagName)
 		names = append(names, tag)
@@ -124,12 +139,33 @@ func fetchLatest() (Release, error) {
 	if url == "" {
 		url = "https://github.com/" + repo + "/releases/tag/" + best
 	}
-	return Release{
+	out := Release{
 		Tag:     best,
 		URL:     url,
 		Notes:   notes[best],
 		Fetched: time.Now(),
-	}, nil
+	}
+	// 最高版本可能只是 git tag，还没发布附件。附件失败不否决版本号。
+	byTag, tagRelErr := getJSON[githubRelease](githubAPI + "/repos/" + repo + "/releases/tags/" + urlpkgEscape(best))
+	if tagRelErr == nil && !byTag.Draft && !byTag.Prerelease {
+		if byTag.HTMLURL != "" {
+			out.URL = byTag.HTMLURL
+		}
+		if strings.TrimSpace(byTag.Body) != "" {
+			out.Notes = strings.TrimSpace(byTag.Body)
+		}
+		for _, a := range byTag.Assets {
+			if a.Name == "" || a.BrowserDownloadURL == "" {
+				continue
+			}
+			out.Assets = append(out.Assets, ReleaseAsset{Name: a.Name, URL: a.BrowserDownloadURL, Size: a.Size})
+		}
+	}
+	return out, nil
+}
+
+func urlpkgEscape(s string) string {
+	return url.PathEscape(s)
 }
 
 func getJSON[T any](url string) (T, error) {

@@ -54,7 +54,7 @@ docker run -d --name fenghuolun --restart unless-stopped \
 
 密码看 `echo` 那一行；容器重建时不要换 `FENGHUOLUN_TOKEN_KEK`。
 
-管理员登录后，**设置 → 系统更新** 可检查并一点升到最新 GitHub Release（需容器挂载 docker.sock）。1Panel / 反代 / 命令行升级 / 备份：见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+管理员登录后，**设置 → 系统更新** 可检查并一点升到最新 GitHub Release（下载程序包到数据卷后自动重启，不必挂载 docker.sock）。1Panel / 反代 / 命令行升级 / 备份：见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 生产不要把 `8088` 暴露到公网。镜像来自 `ghcr.io/yuxiaoyx/fenghuolun`，`latest` 只跟随 `v*` Release。
 

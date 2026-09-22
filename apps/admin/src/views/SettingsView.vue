@@ -65,7 +65,10 @@ function confirmUpdate() {
   if (!target) return
   modal.confirm({
     title: '更新到 ' + target + '？',
-    content: '会备份数据库、拉取镜像并重建容器。页面会短暂不可用，登录状态保留。不要关闭浏览器。',
+    content:
+      sys.value?.mode === 'docker'
+        ? '会备份数据库、拉取镜像并重建容器。页面会短暂不可用，登录状态保留。不要关闭浏览器。'
+        : '会备份数据库，下载程序包到数据目录并自动重启。页面会断几秒到一两分钟，登录状态保留。不要关闭浏览器。',
     okText: '开始更新',
     cancelText: '取消',
     onOk: () => applyUpdate(),
@@ -93,15 +96,28 @@ async function waitUntilVersion(target: string) {
     await new Promise((r) => setTimeout(r, delay))
     delay = Math.min(delay + 500, 5000)
     try {
+      const s = await api.system()
+      if (s.version === target) {
+        return
+      }
+      if (!s.updating && s.hint.startsWith('更新失败')) {
+        throw new Error(s.hint)
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('更新失败')) {
+        throw e
+      }
+    }
+    try {
       const z = await api.healthz()
       if (z.version && z.version === target) {
         return
       }
     } catch {
-      // 重建期间会断一下
+      // 重启期间会断一下
     }
   }
-  throw new Error('等待新版本超时。看 docker logs fenghuolun-updater 或 docker logs fenghuolun')
+  throw new Error('等待新版本超时。看 docker logs fenghuolun，或数据目录里的 update-last-error.json')
 }
 </script>
 

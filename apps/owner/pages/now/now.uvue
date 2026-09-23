@@ -1,6 +1,6 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, dashInt, dashFixed1, dashFixed2, dashUnknown, dashCoord, barWidthPct, snapshotFreshLine, snapshotStale, bounceIfAuthFailed, pingHealth, envelopeOk, envelopeData, relativeUpdateLine, chargeStatusText, pluggedNote, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome } from '../../common/api.uts'
+	import { ownerRequest, sessionOf, dashInt, dashFixed1, dashFixed2, dashUnknown, dashCoord, barWidthPct, snapshotFreshLine, snapshotStale, bounceIfAuthFailed, envelopeErrorCode, pingHealth, envelopeOk, envelopeData, relativeUpdateLine, chargeStatusText, pluggedNote, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome } from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
@@ -97,15 +97,19 @@
 		if (sessionOf() == '') {
 			const up = await pingHealth()
 			if (up == true) {
-				meta.value = '后端已通 · 去「我的」填写 refresh_token'
+				meta.value = '后端已通 · 去「我的」登录'
 			} else {
-				meta.value = '后端未通 · 先启动服务再打开「我的」绑定'
+				meta.value = '后端未通 · 先启动服务再打开「我的」登录'
 			}
 			return
 		}
 		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
 		if (envelopeOk(res) == false) {
 			if (bounceIfAuthFailed(res) == true) {
+				return
+			}
+			if (envelopeErrorCode(res) == 'token_invalid' || envelopeErrorCode(res) == 'unbound') {
+				meta.value = '官方令牌失效。到「我的」里更换绑定，不会自动跳转'
 				return
 			}
 			meta.value = '本服务无响应或会话失效'
@@ -207,12 +211,16 @@
 
 	const tapSync = async () => {
 		if (sessionOf() == '') {
-			uni.navigateTo({ url: '/pages/bind/bind' })
+			uni.navigateTo({ url: '/pages/login/login' })
 			return
 		}
 		uni.showToast({ title: '正在同步…', icon: 'none' })
 		const syncRes = await ownerRequest('POST', '/api/v1/owner/sync', null)
 		if (bounceIfAuthFailed(syncRes) == true) {
+			return
+		}
+		if (envelopeErrorCode(syncRes) == 'token_invalid') {
+			meta.value = '官方绑定已失效 · 到「我的」重新绑定'
 			return
 		}
 		await load()

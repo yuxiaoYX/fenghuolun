@@ -45,11 +45,18 @@ HAR 里仍没有这条请求。用表单探活成功，**不是**从抓包抄来
 
 随后用新 `access_token` 调 `getCurrentVehicle`（JSON `{}`，只带 `Authorization: Bearer`，无 `sign`）同样 `code=20000`。不证明所有接口都可以不签。
 
-登录相关（**产品不实现短信登录**，仅作协议知识）：
+登录相关（HAR 业务成功；产品按此调用，**不含 sign**）：
 
-- 发码、验证码登录在 HAR 中业务成功，返回 `access_token` / `refresh_token` / `expires_in`
-- 样本 `expires_in ≈ 604799`（约七天），当作变量不要写死
-- HAR **没有** refresh 换票的 HTTP 请求。实锤见下方「换票（探活）」
+| 项 | 值 |
+|---|---|
+| 发码 | `POST /pivot/account/2.0/sendCodeAndSignCheck`，表单 `phone`。成功 `code=20000`，`data=true` |
+| 验证码登录 | `POST /pivot/account/2.0/accountSafe/registerOrLoginUncheck`，JSON `phone, code, pushToken, seriesNo, appVersion, deviceType` |
+| 登录成功 | `data.token.access_token` / `refresh_token` / `token_type` / `expires_in`，另有 `data.customer`、`data.vin`。本服务只取 token |
+| 样本有效期 | `expires_in ≈ 604799`（约七天），当作变量不要写死 |
+| 已发送的静态头 | `appId`、`appVersion=6.4.5`、`channel=iOS`、`login_channel=1` |
+| 未发送 | `sign`、`appKey`、`Cookie`、`nonce`、`timestamp`。算法未知，禁止编造 |
+
+HAR **没有** refresh 换票的 HTTP 请求。实锤见上方「换票（探活）」。若发码或登录因缺签名失败，产品返回 `sign_required`，不把失败当成已接通。
 
 ---
 
@@ -158,7 +165,7 @@ GB/T 32960.3 是**车 → 国家监测平台的二进制帧协议**；本接口�
 | 多车列表 | 只有当前车 |
 | `getVehicleHealth` | 仅 JS 线索 |
 | 车控下发 | 配置有空调/门窗等标识，**零条**命令+回执 |
-| 官方短信登录复刻 | 产品禁止做 |
+| 官方短信登录的 `sign` | 路径和字段已按 HAR 调用；签名仍未验证，缺签名时不得宣称登录已通 |
 
 换票一旦实锤，把 host、method、path、content-type、请求字段、响应字段（脱敏）追加到本节「已证实」，并去掉「未验证」对应行。
 

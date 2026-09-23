@@ -1,0 +1,258 @@
+<script setup>
+	import { ref } from 'vue'
+	import { API_BASE } from '../../common/config.uts'
+	import { ownerRequest, saveSession, envelopeOk, envelopeData, envelopeErrorMessage, pingHealth, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const phone = ref('')
+	const password = ref('')
+	const err = ref('')
+	const busy = ref(false)
+
+	const showErr = (res, fallback) => {
+		const message = envelopeErrorMessage(res)
+		if (message != '') {
+			err.value = message
+			return
+		}
+		err.value = fallback
+	}
+
+	const clearPhone = () => {
+		phone.value = ''
+	}
+
+	const enter = (res) => {
+		if (envelopeOk(res) != true) {
+			return false
+		}
+		const d = envelopeData(res)
+		if (d == null || d['session'] == null) {
+			return false
+		}
+		saveSession('' + d['session'])
+		if (d['bound'] == true) {
+			uni.switchTab({
+				url: '/pages/now/now'
+			})
+			return true
+		}
+		uni.redirectTo({
+			url: '/pages/bind/bind'
+		})
+		return true
+	}
+
+	const submit = async () => {
+		if (phone.value.trim() == '') {
+			err.value = '请输入手机号'
+			return
+		}
+		if (password.value == '') {
+			err.value = '请输入密码'
+			return
+		}
+		err.value = ''
+		busy.value = true
+		const res = await ownerRequest('POST', '/api/v1/owner/login', {
+			phone: '' + phone.value.trim(),
+			password: password.value
+		})
+		busy.value = false
+		if (res == null) {
+			const up = await pingHealth()
+			if (up == true) {
+				err.value = '登录没有完成，请重试'
+			} else {
+				err.value = '连不上账本后端服务 ' + API_BASE
+			}
+			return
+		}
+		if (enter(res) == true) {
+			return
+		}
+		showErr(res, '登录失败，请核对手机号和密码')
+	}
+
+	const goRegister = () => {
+		uni.navigateTo({
+			url: '/pages/register/register'
+		})
+	}
+
+	onLoad(() => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="auth-header">
+				<view class="auth-brand-badge">
+					<image class="auth-brand-logo" src="/static/logo.png" />
+				</view>
+				<text class="auth-title">欢迎登录风火轮</text>
+				<text class="auth-subtitle">哪吒 L 车主私有座舱与能耗管理</text>
+			</view>
+
+			<view class="auth-card">
+				<view class="auth-row">
+					<text class="auth-label">+86</text>
+					<input class="auth-input" type="number" maxlength="11" v-model="phone" placeholder="请输入 11 位手机号" />
+					<view class="auth-clear-btn" v-if="phone.length > 0" @click="clearPhone">
+						<text class="auth-clear-txt">✕</text>
+					</view>
+				</view>
+				<view class="hair"></view>
+				<view class="auth-row">
+					<text class="auth-label">密码</text>
+					<input class="auth-input" password v-model="password" placeholder="注册时设置的密码" />
+				</view>
+			</view>
+
+			<view class="auth-hint-row">
+				<text class="auth-hint-txt">账号密码保存在私有服务，密码登录不会向官方发验证码</text>
+			</view>
+
+			<view class="alert-card alert-card-err" v-if="err.length > 0">
+				<text class="alert-card-txt alert-card-err-txt">{{ err }}</text>
+			</view>
+
+			<button class="primary auth-submit-btn" :disabled="busy == true" @click="submit">
+				{{ busy == true ? '登录中...' : '登录' }}
+			</button>
+
+			<view class="auth-footer" @click="goRegister">
+				<text class="auth-footer-dim">还没有风火轮账号？</text>
+				<text class="auth-footer-act">立即注册</text>
+			</view>
+
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>
+
+<style>
+	.auth-header {
+		padding-top: 24px;
+		padding-bottom: 24px;
+		align-items: center;
+		justify-content: center;
+	}
+	.auth-brand-badge {
+		width: 64px;
+		height: 64px;
+		border-radius: 22px;
+		background-color: var(--fhl-pan2);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 14px;
+	}
+	.auth-brand-logo {
+		width: 48px;
+		height: 48px;
+	}
+	.auth-title {
+		font-size: 22px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+		letter-spacing: 0.5px;
+	}
+	.auth-subtitle {
+		margin-top: 6px;
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.auth-card {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		border-radius: 18px;
+		overflow: hidden;
+		margin-bottom: 10px;
+	}
+	.auth-row {
+		flex-direction: row;
+		align-items: center;
+		min-height: 54px;
+		padding-left: 16px;
+		padding-right: 14px;
+	}
+	.auth-label {
+		width: 56px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+	}
+	.auth-input {
+		flex: 1;
+		height: 44px;
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--fhl-ink);
+		border-width: 0px;
+		background-color: transparent;
+	}
+	.auth-clear-btn {
+		width: 26px;
+		height: 26px;
+		border-radius: 13px;
+		background-color: var(--fhl-pan2);
+		align-items: center;
+		justify-content: center;
+		margin-left: 6px;
+	}
+	.auth-clear-txt {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--fhl-mut);
+	}
+
+	.auth-hint-row {
+		padding-left: 4px;
+		padding-right: 4px;
+		margin-bottom: 16px;
+	}
+	.auth-hint-txt {
+		font-size: 11px;
+		color: var(--fhl-faint);
+		line-height: 1.4em;
+	}
+	.auth-submit-btn {
+		margin-top: 8px;
+		margin-bottom: 16px;
+		border-radius: 16px;
+		min-height: 50px;
+		height: 50px;
+		font-size: 16px;
+	}
+	.auth-footer {
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding-top: 12px;
+		padding-bottom: 12px;
+	}
+	.auth-footer-dim {
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.auth-footer-act {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--fhl-brand);
+		margin-left: 4px;
+	}
+</style>

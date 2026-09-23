@@ -53,13 +53,22 @@ fenghuolun/
 
 | 端 | 可以做 | 不可以做 |
 |---|---|---|
-| owner | 展示解码后的领域对象、提交 refresh_token、请求同步 | 持有官方 Access Token、自拼签名、直连官方 |
+| owner | 展示解码后的领域对象、提交手机号/密码/验证码或 refresh_token、请求同步 | 持有官方 Access Token、自拼签名、直连官方 |
 | admin | 绑定运维、任务历史、脱敏库表、运行时设置 | 用管理员身份拉明文 token、代替车主发车控、SQL 控制台、地图 |
 | server | 换票、官方 HTTP、解码、加密存储、鉴权 | 把官方响应原样倒给前端（必须先解码/脱敏） |
 
 ## 数据流
 
 ### 绑定
+
+注册只保存手机号和 bcrypt 密码。登录只发本服务会话。
+
+绑定二选一：
+
+1. 短信：服务端 `POST sendCodeAndSignCheck`，再 `POST registerOrLoginUncheck`，从 `data.token` 取出令牌。验证码不落库。请求头保持官方原始大小写，不编造 `sign`
+2. 手填 `refresh_token`：不调用官方登录
+
+令牌绑定：
 
 1. 车主提交 `refresh_token`
 2. `internal/neta` 换票（`refreshApiToken`，V1 已探活）
@@ -99,7 +108,7 @@ fenghuolun/
 
 - 单机自托管：一个 Go 进程 + 本地 SQLite 文件；生产镜像把车主 H5 和管理端 dist 打进同一容器。`docker compose up -d` 即可；admin 开发仍用 Vite 代理；车主用浏览器打开 `/`。步骤见 `docs/DEPLOYMENT.md`
 - CORS：空库时从环境变量写入 `app_settings`，之后以后台设置为准；本机 `127.0.0.1` / `localhost` 端口始终放行
-- 不默认公网多租户 SaaS。若同一实例服务多个车主，仍然是「多个 refresh_token 绑定」，不是开放注册社区
+- 不默认公网多租户 SaaS。同一实例可以有多个车主账号，每个账号仍必须用自己的官方短信或 `refresh_token` 绑定自己的车
 
 ## 与现网官方云的关系
 

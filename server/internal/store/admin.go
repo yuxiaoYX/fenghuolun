@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fenghuolun/internal/clock"
+	"fenghuolun/internal/crypto"
 	"fenghuolun/internal/model/do"
 	"fenghuolun/internal/model/entity"
 	"fenghuolun/internal/neta"
@@ -53,10 +54,10 @@ type AdminHealth struct {
 }
 
 type TablePage struct {
-	Name   string           `json:"name"`
-	Total  int              `json:"total"`
-	Items  []map[string]any `json:"items"`
-	Note   string           `json:"note"`
+	Name  string           `json:"name"`
+	Total int              `json:"total"`
+	Items []map[string]any `json:"items"`
+	Note  string           `json:"note"`
 }
 
 func (s *SQLite) BindingDetail(id string) (*BindingDetail, error) {
@@ -82,13 +83,13 @@ func (s *SQLite) BindingDetail(id string) (*BindingDetail, error) {
 			SyncedAt:   b.SyncedAt,
 			Disabled:   b.Disabled,
 		},
-		Nickname:     b.Meta.Nickname,
-		Trim:         b.Meta.Trim,
-		IsExtender:   b.Meta.IsExtender,
-		RefreshHint:  b.RefreshHint,
-		HasRefresh:   len(row.RefreshCipher) > 0,
-		HasAccess:    len(row.AccessCipher) > 0,
-		Energy:       b.Energy,
+		Nickname:    b.Meta.Nickname,
+		Trim:        b.Meta.Trim,
+		IsExtender:  b.Meta.IsExtender,
+		RefreshHint: b.RefreshHint,
+		HasRefresh:  len(row.RefreshCipher) > 0,
+		HasAccess:   len(row.AccessCipher) > 0,
+		Energy:      b.Energy,
 	}
 	n, _ := s.db.Model("owner_session").Ctx(ctx).Where("binding_id", id).Count()
 	d.SessionCount = n
@@ -276,6 +277,7 @@ func (s *SQLite) TableNames() []map[string]any {
 		{"name": "energy", "label": "能耗"},
 		{"name": "sync_job", "label": "同步任务"},
 		{"name": "owner_session", "label": "车主会话"},
+		{"name": "owner_account", "label": "车主账号"},
 		{"name": "admin_user", "label": "管理员"},
 		{"name": "admin_session", "label": "管理员会话"},
 		{"name": "app_settings", "label": "运行时设置"},
@@ -394,6 +396,27 @@ func (s *SQLite) ListTable(name, bindingID string, page, pageSize int) (*TablePa
 			})
 		}
 		return &TablePage{Name: name, Total: total, Items: items, Note: "不返回 token 哈希"}, nil
+	case "owner_account":
+		total, err := m.Count()
+		if err != nil {
+			return nil, err
+		}
+		var rows []entity.OwnerAccount
+		if err := m.OrderDesc("created_at").Page(page, pageSize).Scan(&rows); err != nil {
+			return nil, err
+		}
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			phone := "—"
+			if plain, err := crypto.Open(s.kek, r.PhoneCipher); err == nil {
+				phone = MaskPhone(plain)
+			}
+			items = append(items, map[string]any{
+				"id": r.Id, "binding_id": r.BindingId, "phone_masked": phone,
+				"created_at": wallTime(r.CreatedAt), "updated_at": wallTime(r.UpdatedAt), "deleted_at": wallTime(r.DeletedAt),
+			})
+		}
+		return &TablePage{Name: name, Total: total, Items: items, Note: "不返回手机号明文、手机号查找值或密码哈希"}, nil
 	case "admin_user":
 		total, err := m.Count()
 		if err != nil {

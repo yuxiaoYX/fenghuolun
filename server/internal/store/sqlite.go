@@ -91,6 +91,7 @@ func (s *SQLite) migrate() error {
 		`CREATE TABLE IF NOT EXISTS owner_session (
   token_hash TEXT PRIMARY KEY,
   binding_id TEXT NOT NULL,
+  account_id TEXT NOT NULL DEFAULT '',
   created_at INTEGER,
   updated_at INTEGER,
   deleted_at INTEGER DEFAULT 0
@@ -178,6 +179,16 @@ func (s *SQLite) migrate() error {
   updated_at INTEGER,
   deleted_at INTEGER DEFAULT 0
 )`,
+		`CREATE TABLE IF NOT EXISTS owner_account (
+  id TEXT PRIMARY KEY,
+  phone_hash TEXT NOT NULL UNIQUE,
+  phone_cipher BLOB,
+  password_hash TEXT NOT NULL,
+  binding_id TEXT NOT NULL DEFAULT '',
+  created_at INTEGER,
+  updated_at INTEGER,
+  deleted_at INTEGER DEFAULT 0
+)`,
 	} {
 		if _, err := s.db.Exec(ctx, stmt); err != nil {
 			return err
@@ -190,6 +201,7 @@ func (s *SQLite) migrate() error {
 		`ALTER TABLE binding ADD COLUMN loc_reported_at INTEGER`,
 		`ALTER TABLE binding ADD COLUMN created_at INTEGER`,
 		`ALTER TABLE binding ADD COLUMN deleted_at INTEGER DEFAULT 0`,
+		`ALTER TABLE owner_session ADD COLUMN account_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE owner_session ADD COLUMN updated_at INTEGER`,
 		`ALTER TABLE owner_session ADD COLUMN deleted_at INTEGER DEFAULT 0`,
 		`ALTER TABLE snapshot ADD COLUMN created_at INTEGER`,
@@ -582,12 +594,15 @@ func jobFinishedUnix(j entity.SyncJob) int64 {
 }
 
 func (s *SQLite) Delete(session string) {
+	if session == "" {
+		return
+	}
 	b := s.Get(session)
+	ctx := s.ctx()
+	_, _ = s.db.Model("owner_session").Ctx(ctx).Where("token_hash", hashToken(session)).Delete()
 	if b == nil {
 		return
 	}
-	ctx := s.ctx()
-	_, _ = s.db.Model("owner_session").Ctx(ctx).Where("token_hash", hashToken(session)).Delete()
 	_, _ = s.db.Model("binding").Ctx(ctx).Where("id", b.ID).Data(do.Binding{
 		RefreshCipher: gdb.Raw("NULL"),
 		AccessCipher:  gdb.Raw("NULL"),

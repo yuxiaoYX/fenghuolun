@@ -1,0 +1,455 @@
+<script setup>
+	import { ref } from 'vue'
+	import { API_BASE } from '../../common/config.uts'
+	import { ownerRequest, saveSession, envelopeOk, envelopeData, envelopeErrorCode, envelopeErrorMessage, pingHealth, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const mode = ref('sms')
+	const phone = ref('')
+	const password = ref('')
+	const code = ref('')
+	const token = ref('')
+	const err = ref('')
+	const busy = ref(false)
+	const left = ref(0)
+	const sendText = ref('获取验证码')
+
+	const showErr = (res, fallback) => {
+		const message = envelopeErrorMessage(res)
+		if (message != '') {
+			err.value = message
+			return
+		}
+		if (envelopeErrorCode(res) == 'token_invalid') {
+			err.value = '请重新核对 refresh_token'
+			return
+		}
+		err.value = fallback
+	}
+
+	const offline = async () => {
+		const up = await pingHealth()
+		if (up == true) {
+			err.value = '官方接口无响应，请稍后重试'
+			return
+		}
+		err.value = '连不上账本后端服务 ' + API_BASE
+	}
+
+	const clearPhone = () => {
+		phone.value = ''
+	}
+
+	const paintSend = () => {
+		if (left.value > 0) {
+			sendText.value = left.value.toString() + 's'
+			return
+		}
+		sendText.value = '获取验证码'
+	}
+
+	const tick = () => {
+		paintSend()
+		if (left.value <= 0) {
+			return
+		}
+		setTimeout(() => {
+			left.value = left.value - 1
+			tick()
+		}, 1000)
+	}
+
+	const useSMS = () => {
+		mode.value = 'sms'
+		err.value = ''
+	}
+
+	const useToken = () => {
+		mode.value = 'token'
+		err.value = ''
+	}
+
+	const sendCode = async () => {
+		err.value = ''
+		if (phone.value.trim() == '') {
+			err.value = '请先输入手机号'
+			return
+		}
+		if (left.value > 0 || busy.value == true) {
+			return
+		}
+		busy.value = true
+		const res = await ownerRequest('POST', '/api/v1/owner/sms/send', {
+			phone: '' + phone.value.trim()
+		})
+		busy.value = false
+		if (res == null) {
+			await offline()
+			return
+		}
+		if (envelopeOk(res) == true) {
+			left.value = 60
+			tick()
+			uni.showToast({
+				title: '验证码已发送',
+				icon: 'none'
+			})
+			return
+		}
+		showErr(res, '验证码没发出去，请核对手机号')
+	}
+
+	const finish = async (res) => {
+		busy.value = false
+		if (res == null) {
+			await offline()
+			return
+		}
+		if (envelopeOk(res) == true) {
+			const d = envelopeData(res)
+			if (d != null && d['session'] != null) {
+				saveSession('' + d['session'])
+				uni.switchTab({
+					url: '/pages/now/now'
+				})
+				return
+			}
+		}
+		showErr(res, '注册没有完成')
+	}
+
+	const submit = async () => {
+		if (phone.value.trim() == '') {
+			err.value = '请输入手机号'
+			return
+		}
+		if (password.value.length < 8) {
+			err.value = '密码至少需要 8 位'
+			return
+		}
+		err.value = ''
+		busy.value = true
+		if (mode.value == 'token') {
+			if (token.value.trim() == '') {
+				busy.value = false
+				err.value = '请粘贴 refresh_token'
+				return
+			}
+			const res = await ownerRequest('POST', '/api/v1/owner/register', {
+				phone: '' + phone.value.trim(),
+				password: password.value,
+				refresh_token: token.value.trim()
+			})
+			await finish(res)
+			return
+		}
+		if (code.value.trim() == '') {
+			busy.value = false
+			err.value = '请输入收到的短信验证码'
+			return
+		}
+		const res = await ownerRequest('POST', '/api/v1/owner/register', {
+			phone: '' + phone.value.trim(),
+			password: password.value,
+			code: '' + code.value.trim()
+		})
+		await finish(res)
+	}
+
+	const goLogin = () => {
+		uni.redirectTo({
+			url: '/pages/login/login'
+		})
+	}
+
+	onLoad(() => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="reg-header">
+				<view class="auth-brand-badge">
+					<image class="auth-brand-logo" src="/static/logo.png" />
+				</view>
+				<text class="reg-title">注册风火轮账号</text>
+				<text class="reg-subtitle">一步完成私有账号创建并绑定哪吒车辆</text>
+			</view>
+
+			<!-- 模式分段选择器 -->
+			<view class="mode-seg-wrap">
+				<view class="mode-seg-pill" :class="mode == 'sms' ? 'mode-seg-active' : ''" @click="useSMS">
+					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码（推荐）</text>
+				</view>
+				<view class="mode-seg-pill" :class="mode == 'token' ? 'mode-seg-active' : ''" @click="useToken">
+					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（进阶）</text>
+				</view>
+			</view>
+
+			<!-- 账号基本信息卡片 -->
+			<text class="sec-title">账号信息</text>
+			<view class="auth-card">
+				<view class="auth-row">
+					<text class="auth-label">+86</text>
+					<input class="auth-input" type="number" maxlength="11" v-model="phone" placeholder="手机号（用于账号与短信）" />
+					<view class="auth-clear-btn" v-if="phone.length > 0" @click="clearPhone">
+						<text class="auth-clear-txt">✕</text>
+					</view>
+				</view>
+				<view class="hair"></view>
+				<view class="auth-row">
+					<text class="auth-label">密码</text>
+					<input class="auth-input" password v-model="password" placeholder="设置风火轮密码（至少 8 位）" />
+				</view>
+			</view>
+
+			<!-- 官方绑定方式卡片 -->
+			<text class="sec-title">官方车辆授权</text>
+			<view class="auth-card" v-if="mode == 'sms'">
+				<view class="auth-row">
+					<text class="auth-label">验证码</text>
+					<input class="auth-input" type="number" maxlength="6" v-model="code" placeholder="官方短信验证码" />
+					<view class="auth-code-pill" :class="left > 0 ? 'auth-code-pill-dis' : ''" @click="sendCode">
+						<text class="auth-code-txt" :class="left > 0 ? 'auth-code-txt-dis' : ''">{{ sendText }}</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="auth-card auth-token-card" v-if="mode == 'token'">
+				<text class="token-hint-txt">从官方哪吒 App 抓包取得 refresh_token，粘贴到下方：</text>
+				<textarea class="token-area" v-model="token" placeholder="整段粘贴 refresh_token，不调用官方登录接口" />
+			</view>
+
+			<view class="security-card">
+				<text class="security-txt">🛡️ 所有凭证保存在您的私有部署环境中，本地 AES 加密保护，绝不上传任何第三方服务器。</text>
+			</view>
+
+			<view class="alert-card alert-card-err" v-if="err.length > 0">
+				<text class="alert-card-txt alert-card-err-txt">{{ err }}</text>
+			</view>
+
+			<button class="primary auth-submit-btn" :disabled="busy == true" @click="submit">
+				{{ busy == true ? '正在注册并绑定...' : '立即注册并绑定' }}
+			</button>
+
+			<view class="auth-footer" @click="goLogin">
+				<text class="auth-footer-dim">已有风火轮账号？</text>
+				<text class="auth-footer-act">返回登录</text>
+			</view>
+
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>
+
+<style>
+	.reg-header {
+		padding-top: 20px;
+		padding-bottom: 16px;
+		align-items: center;
+		justify-content: center;
+	}
+	.auth-brand-badge {
+		width: 60px;
+		height: 60px;
+		border-radius: 20px;
+		background-color: var(--fhl-pan2);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 12px;
+	}
+	.auth-brand-logo {
+		width: 44px;
+		height: 44px;
+	}
+	.reg-title {
+		font-size: 22px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.reg-subtitle {
+		margin-top: 5px;
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.mode-seg-wrap {
+		flex-direction: row;
+		background-color: var(--fhl-pan2);
+		border-radius: 12px;
+		padding-top: 4px;
+		padding-right: 4px;
+		padding-bottom: 4px;
+		padding-left: 4px;
+		margin-bottom: 8px;
+	}
+	.mode-seg-pill {
+		flex: 1;
+		min-height: 38px;
+		border-radius: 9px;
+		align-items: center;
+		justify-content: center;
+	}
+	.mode-seg-active {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.mode-seg-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.mode-seg-active-txt {
+		color: var(--fhl-brand);
+		font-weight: 700;
+	}
+	.auth-card {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		border-radius: 18px;
+		overflow: hidden;
+		margin-bottom: 10px;
+	}
+	.auth-token-card {
+		padding-top: 14px;
+		padding-right: 14px;
+		padding-bottom: 14px;
+		padding-left: 14px;
+	}
+	.token-hint-txt {
+		font-size: 11px;
+		color: var(--fhl-mut);
+		margin-bottom: 8px;
+		line-height: 1.4em;
+	}
+	.token-area {
+		width: 100%;
+		height: 90px;
+		padding-top: 8px;
+		padding-right: 10px;
+		padding-bottom: 8px;
+		padding-left: 10px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		font-size: 12px;
+		color: var(--fhl-ink);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.auth-row {
+		flex-direction: row;
+		align-items: center;
+		min-height: 54px;
+		padding-left: 16px;
+		padding-right: 14px;
+	}
+	.auth-label {
+		width: 56px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+	}
+	.auth-input {
+		flex: 1;
+		height: 44px;
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--fhl-ink);
+		border-width: 0px;
+		background-color: transparent;
+	}
+	.auth-clear-btn {
+		width: 26px;
+		height: 26px;
+		border-radius: 13px;
+		background-color: var(--fhl-pan2);
+		align-items: center;
+		justify-content: center;
+		margin-left: 6px;
+	}
+	.auth-clear-txt {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--fhl-mut);
+	}
+
+	.auth-code-pill {
+		padding-top: 6px;
+		padding-right: 12px;
+		padding-bottom: 6px;
+		padding-left: 12px;
+		border-radius: 10px;
+		background-color: rgba(255, 106, 61, 0.12);
+		margin-left: 8px;
+	}
+	.auth-code-pill-dis {
+		background-color: var(--fhl-pan2);
+	}
+	.auth-code-txt {
+		font-size: 12px;
+		font-weight: 700;
+		color: var(--fhl-brand);
+	}
+	.auth-code-txt-dis {
+		color: var(--fhl-faint);
+	}
+	.security-card {
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: rgba(47, 224, 141, 0.08);
+		border-width: 1px;
+		border-style: solid;
+		border-color: rgba(47, 224, 141, 0.2);
+		margin-top: 6px;
+		margin-bottom: 12px;
+	}
+	.security-txt {
+		font-size: 11px;
+		color: var(--fhl-ele-text);
+		line-height: 1.5em;
+	}
+	.auth-submit-btn {
+		margin-top: 4px;
+		margin-bottom: 16px;
+		border-radius: 16px;
+		min-height: 50px;
+		height: 50px;
+		font-size: 16px;
+	}
+	.auth-footer {
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		padding-top: 8px;
+		padding-bottom: 12px;
+	}
+	.auth-footer-dim {
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.auth-footer-act {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--fhl-brand);
+		margin-left: 4px;
+	}
+</style>

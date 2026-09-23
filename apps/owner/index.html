@@ -10,14 +10,21 @@
         '<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
         (coverSupport ? ', viewport-fit=cover' : '') + '" />')
     </script>
-    <title></title>
+    <title>风火轮</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
     <style>
       html, body, #app {
-        background-color: #EEF2F6;
         height: 100%;
         margin: 0;
       }
     </style>
+    <script>
+      (function() {
+        var t = localStorage.getItem('fhl_theme');
+        var bg = t === 'dark' ? '#070B10' : '#EEF2F6';
+        document.documentElement.style.backgroundColor = bg;
+      })();
+    </script>
     <!--preload-links-->
     <!--app-context-->
   </head>

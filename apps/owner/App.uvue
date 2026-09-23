@@ -12,6 +12,7 @@
 		flex: 1;
 		flex-direction: column;
 		overflow: hidden;
+		min-height: 100%;
 		--fhl-bg: #EEF2F6;
 		--fhl-pan: #FFFFFF;
 		--fhl-pan2: #F5F8FB;
@@ -327,6 +328,44 @@
 		border-width: 1px;
 		border-style: solid;
 		border-color: var(--fhl-line);
+	}
+	.seg {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 8px;
+	}
+	.seg-on {
+		margin-right: 18px;
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--fhl-brand);
+	}
+	.seg-off {
+		margin-right: 18px;
+		font-size: 14px;
+		color: var(--fhl-faint);
+	}
+	.link {
+		margin-top: 16px;
+		font-size: 13px;
+		color: var(--fhl-brand);
+	}
+	.line {
+		width: 100%;
+		align-self: stretch;
+		margin-top: 8px;
+		height: 44px;
+		padding-top: 0px;
+		padding-right: 12px;
+		padding-bottom: 0px;
+		padding-left: 12px;
+		border-radius: 15px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line2);
+		background-color: var(--fhl-pan);
+		font-size: 15px;
+		color: var(--fhl-ink);
 	}
 	.input {
 		width: 100%;
@@ -1117,4 +1156,72 @@
 	.seg-on-txt {
 		color: #ffffff;
 	}
+	.tag-badge {
+		padding-top: 2px;
+		padding-bottom: 2px;
+		padding-left: 6px;
+		padding-right: 6px;
+		border-radius: 6px;
+		background-color: var(--fhl-pan2);
+		align-items: center;
+		justify-content: center;
+	}
+	.tag-badge-green {
+		background-color: var(--fhl-ele2);
+	}
+	.tag-badge-warn {
+		background-color: rgba(245, 165, 36, 0.15);
+	}
+	.tag-badge-err {
+		background-color: rgba(194, 65, 45, 0.15);
+	}
+	.tag-badge-txt {
+		font-size: 10px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.tag-badge-green-txt {
+		color: var(--fhl-ele-text);
+	}
+	.tag-badge-warn-txt {
+		color: var(--fhl-oil-text);
+	}
+	.tag-badge-err-txt {
+		color: var(--fhl-warn);
+	}
+	.alert-card {
+		flex-direction: row;
+		align-items: center;
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		margin-bottom: 12px;
+	}
+	.alert-card-err {
+		background-color: rgba(194, 65, 45, 0.08);
+		border-color: rgba(194, 65, 45, 0.25);
+	}
+	.alert-card-warn {
+		background-color: rgba(245, 165, 36, 0.08);
+		border-color: rgba(245, 165, 36, 0.25);
+	}
+	.alert-card-txt {
+		font-size: 12px;
+		color: var(--fhl-ink2);
+		line-height: 1.45em;
+		flex: 1;
+	}
+	.alert-card-err-txt {
+		color: var(--fhl-warn);
+	}
+	.alert-card-warn-txt {
+		color: var(--fhl-oil-text);
+	}
 </style>
+

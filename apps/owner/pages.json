@@ -31,9 +31,27 @@
       }
     },
     {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/register/register",
+      "style": {
+        "navigationBarTitleText": "注册"
+      }
+    },
+    {
       "path": "pages/bind/bind",
       "style": {
         "navigationBarTitleText": "绑定"
+      }
+    },
+    {
+      "path": "pages/account/account",
+      "style": {
+        "navigationBarTitleText": "风火轮账号"
       }
     },
     {
@@ -57,10 +75,10 @@
     "backgroundColorContent": "@bgColorContent"
   },
   "tabBar": {
-    "color": "#93A5B5",
-    "selectedColor": "#087E55",
-    "backgroundColor": "#FFFFFF",
-    "borderStyle": "white",
+    "color": "@tabColor",
+    "selectedColor": "@tabSelectedColor",
+    "backgroundColor": "@tabBgColor",
+    "borderStyle": "@tabBorderStyle",
     "height": 56,
     "iconWidth": 24,
     "list": [

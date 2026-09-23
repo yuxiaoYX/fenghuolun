@@ -1,50 +1,174 @@
 <script setup>
 	import { ref } from 'vue'
 	import { API_BASE } from '../../common/config.uts'
-	import { ownerRequest, saveSession, envelopeOk, envelopeData, envelopeErrorCode, pingHealth, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+	import { ownerRequest, sessionOf, saveSession, envelopeOk, envelopeData, envelopeErrorCode, envelopeErrorMessage, pingHealth, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
+	const mode = ref('sms')
+	const code = ref('')
 	const token = ref('')
 	const err = ref('')
 	const busy = ref(false)
+	const left = ref(0)
+	const sendText = ref('获取验证码')
+	const showHelp = ref(false)
 
-	const submit = async () => {
+	const showErr = (res, fallback) => {
+		if (envelopeErrorCode(res) == 'token_invalid') {
+			err.value = '官方绑定已失效，请重新核对验证码或 refresh_token'
+			return
+		}
+		const message = envelopeErrorMessage(res)
+		if (message != '') {
+			err.value = message
+			return
+		}
+		err.value = fallback
+	}
+
+	const enter = (res) => {
+		if (envelopeOk(res) != true) {
+			return false
+		}
+		const d = envelopeData(res)
+		if (d != null && d['session'] != null) {
+			saveSession('' + d['session'])
+			uni.showToast({
+				title: '绑定成功',
+				icon: 'success'
+			})
+			setTimeout(() => {
+				uni.switchTab({
+					url: '/pages/now/now'
+				})
+			}, 500)
+			return true
+		}
+		return false
+	}
+
+	const offline = async () => {
+		const up = await pingHealth()
+		if (up == true) {
+			err.value = '官方云端接口没有响应，请稍后重试'
+			return
+		}
+		err.value = '连不上账本后端服务 ' + API_BASE
+	}
+
+	const paintSend = () => {
+		if (left.value > 0) {
+			sendText.value = left.value.toString() + 's'
+			return
+		}
+		sendText.value = '获取验证码'
+	}
+
+	const tick = () => {
+		paintSend()
+		if (left.value <= 0) {
+			return
+		}
+		setTimeout(() => {
+			left.value = left.value - 1
+			tick()
+		}, 1000)
+	}
+
+	const useSMS = () => {
+		mode.value = 'sms'
+		err.value = ''
+	}
+
+	const useToken = () => {
+		mode.value = 'token'
+		err.value = ''
+	}
+
+	const toggleHelp = () => {
+		showHelp.value = showHelp.value == false
+	}
+
+	const sendCode = async () => {
+		err.value = ''
+		if (left.value > 0 || busy.value == true) {
+			return
+		}
+		busy.value = true
+		const res = await ownerRequest('POST', '/api/v1/owner/sms/send', null)
+		busy.value = false
+		if (res == null) {
+			await offline()
+			return
+		}
+		if (envelopeOk(res) == true) {
+			left.value = 60
+			tick()
+			uni.showToast({
+				title: '验证码已发送',
+				icon: 'none'
+			})
+			return
+		}
+		showErr(res, '验证码没发出去，请稍后重试')
+	}
+
+	const submitSMS = async () => {
+		if (code.value.trim() == '') {
+			err.value = '请输入短信验证码'
+			return
+		}
+		err.value = ''
+		busy.value = true
+		const res = await ownerRequest('POST', '/api/v1/owner/bind/sms', {
+			code: '' + code.value.trim()
+		})
+		busy.value = false
+		if (res == null) {
+			await offline()
+			return
+		}
+		if (enter(res) == true) {
+			return
+		}
+		showErr(res, '官方验证失败，请核对验证码')
+	}
+
+	const submitToken = async () => {
+		if (token.value.trim() == '') {
+			err.value = '请粘贴 refresh_token'
+			return
+		}
 		err.value = ''
 		busy.value = true
 		const res = await ownerRequest('POST', '/api/v1/owner/bind', {
-			refresh_token: token.value
+			refresh_token: token.value.trim()
 		})
 		busy.value = false
 		if (res == null) {
 			const up = await pingHealth()
 			if (up == true) {
-				err.value = '绑定未完成。换票要连官方云，请稍后再试。'
+				err.value = '绑定未完成。换票需要连官方云，请稍后再试。'
 			} else {
-				err.value = '连不上账本服务 ' + API_BASE + '。确认 Go 已启动：go run -C server .'
+				err.value = '连不上账本后端服务 ' + API_BASE
 			}
 			return
 		}
-		if (envelopeOk(res) == true) {
-			const d = envelopeData(res)
-			if (d != null && d['session'] != null) {
-				saveSession('' + d['session'])
-				uni.switchTab({
-					url: '/pages/now/now'
-				})
-				return
-			}
-		}
-		const code = envelopeErrorCode(res)
-		if (code == 'token_invalid' || code == 'invalid_request') {
-			err.value = '请重新填写 refresh_token'
+		if (enter(res) == true) {
 			return
 		}
-		err.value = '绑定失败'
+		showErr(res, 'Token 换票失败，请检查是否过期')
 	}
 
 	onLoad(() => {
+		if (sessionOf() == '') {
+			uni.redirectTo({
+				url: '/pages/login/login'
+			})
+			return
+		}
 		themeClass.value = themeClassOf()
 		padStyle.value = padBoxStyle(false)
 		wrapStyle.value = pageWrapStyle()
@@ -56,14 +180,278 @@
 	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
 		<scroll-view class="scroller" direction="vertical">
 		<view class="pad" :style="padStyle">
-			<text class="meta">把 refresh_token 交给本服务。成功后本服务换票并拉车况，手机不保存官方令牌。</text>
-			<text class="field">refresh_token</text>
-			<textarea class="input" style="width:100%" v-model="token" placeholder="从官方哪吒 App 取得，整段粘贴"></textarea>
-			<text class="note">不用填网关和签名。不能刷车机 OTA。</text>
-			<button class="primary" :disabled="busy == true" @click="submit">绑定并拉第一次快照</button>
-			<text class="err" v-if="err.length > 0">{{ err }}</text>
+			<view class="bind-header">
+				<text class="bind-title">官方车辆授权绑定</text>
+				<text class="bind-subtitle">用于同步哪吒 L 实时车况、电量及远程车控</text>
+			</view>
+
+			<!-- 模式分段选择器 -->
+			<view class="mode-seg-wrap">
+				<view class="mode-seg-pill" :class="mode == 'sms' ? 'mode-seg-active' : ''" @click="useSMS">
+					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码（推荐）</text>
+				</view>
+				<view class="mode-seg-pill" :class="mode == 'token' ? 'mode-seg-active' : ''" @click="useToken">
+					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（进阶）</text>
+				</view>
+			</view>
+
+			<!-- 短信模式 -->
+			<view v-if="mode == 'sms'">
+				<view class="tip-card">
+					<text class="tip-txt">验证码将发送到当前风火轮账号绑定的手机号，官方验证后自动换取长期凭证。</text>
+				</view>
+
+				<view class="auth-card">
+					<view class="auth-row">
+						<text class="auth-label">验证码</text>
+						<input class="auth-input" type="number" maxlength="6" v-model="code" placeholder="官方短信验证码" />
+						<view class="auth-code-pill" :class="left > 0 ? 'auth-code-pill-dis' : ''" @click="sendCode">
+							<text class="auth-code-txt" :class="left > 0 ? 'auth-code-txt-dis' : ''">{{ sendText }}</text>
+						</view>
+					</view>
+				</view>
+
+				<button class="primary auth-submit-btn" :disabled="busy == true" @click="submitSMS">
+					{{ busy == true ? '正在验证并绑定...' : '用验证码确认绑定' }}
+				</button>
+			</view>
+
+			<!-- Token 模式 -->
+			<view v-if="mode == 'token'">
+				<view class="tip-card">
+					<text class="tip-txt">使用官方哪吒 App 现有的 refresh_token，直接换票完成绑定，不触发官方短信。</text>
+				</view>
+
+				<view class="auth-card auth-token-card">
+					<text class="token-hint-txt">整段粘贴 refresh_token：</text>
+					<textarea class="token-area" v-model="token" placeholder="粘贴从哪吒 App 抓取的 refresh_token" />
+				</view>
+
+				<view class="help-toggle-row" @click="toggleHelp">
+					<text class="help-toggle-txt">❓ 如何获取 refresh_token？</text>
+					<text class="help-toggle-arrow">{{ showHelp == true ? '收起 ▲' : '展开 ▼' }}</text>
+				</view>
+
+				<view class="help-card" v-if="showHelp == true">
+					<text class="help-step-txt">1. 使用抓包工具（如 Reqable / Charles）配置手机代理；</text>
+					<text class="help-step-txt">2. 在官方哪吒汽车 App 中触发任意车控或刷新；</text>
+					<text class="help-step-txt">3. 抓取请求头或响应体中的 `refreshToken` 字段完整复制粘贴于此。</text>
+				</view>
+
+				<button class="primary auth-submit-btn" :disabled="busy == true" @click="submitToken">
+					{{ busy == true ? '正在换票并绑定...' : '用 Token 确认绑定' }}
+				</button>
+			</view>
+
+			<view class="security-card">
+				<text class="security-txt">🛡️ 官方 Token 仅在您的私有服务器内部轮转，不存储明文密码，随时可在「我的」解除绑定。</text>
+			</view>
+
+			<view class="alert-card alert-card-err" v-if="err.length > 0">
+				<text class="alert-card-txt alert-card-err-txt">{{ err }}</text>
+			</view>
+
 			<view class="page-end"></view>
 		</view>
 		</scroll-view>
 	</view>
 </template>
+
+<style>
+	.bind-header {
+		padding-top: 16px;
+		padding-bottom: 16px;
+	}
+	.bind-title {
+		font-size: 22px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.bind-subtitle {
+		margin-top: 5px;
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.mode-seg-wrap {
+		flex-direction: row;
+		background-color: var(--fhl-pan2);
+		border-radius: 12px;
+		padding-top: 4px;
+		padding-right: 4px;
+		padding-bottom: 4px;
+		padding-left: 4px;
+		margin-bottom: 14px;
+	}
+	.mode-seg-pill {
+		flex: 1;
+		min-height: 38px;
+		border-radius: 9px;
+		align-items: center;
+		justify-content: center;
+	}
+	.mode-seg-active {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.mode-seg-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.mode-seg-active-txt {
+		color: var(--fhl-brand);
+		font-weight: 700;
+	}
+	.tip-card {
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		margin-bottom: 12px;
+	}
+	.tip-txt {
+		font-size: 12px;
+		color: var(--fhl-mut);
+		line-height: 1.45em;
+	}
+	.auth-card {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		border-radius: 18px;
+		overflow: hidden;
+		margin-bottom: 14px;
+	}
+	.auth-token-card {
+		padding-top: 14px;
+		padding-right: 14px;
+		padding-bottom: 14px;
+		padding-left: 14px;
+	}
+	.token-hint-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+		margin-bottom: 8px;
+	}
+	.token-area {
+		width: 100%;
+		height: 96px;
+		padding-top: 8px;
+		padding-right: 10px;
+		padding-bottom: 8px;
+		padding-left: 10px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		font-size: 12px;
+		color: var(--fhl-ink);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.auth-row {
+		flex-direction: row;
+		align-items: center;
+		min-height: 54px;
+		padding-left: 16px;
+		padding-right: 14px;
+	}
+	.auth-label {
+		width: 60px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+	}
+	.auth-input {
+		flex: 1;
+		height: 44px;
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--fhl-ink);
+		border-width: 0px;
+		background-color: transparent;
+	}
+	.auth-code-pill {
+		padding-top: 6px;
+		padding-right: 12px;
+		padding-bottom: 6px;
+		padding-left: 12px;
+		border-radius: 10px;
+		background-color: rgba(255, 106, 61, 0.12);
+		margin-left: 8px;
+	}
+	.auth-code-pill-dis {
+		background-color: var(--fhl-pan2);
+	}
+	.auth-code-txt {
+		font-size: 12px;
+		font-weight: 700;
+		color: var(--fhl-brand);
+	}
+	.auth-code-txt-dis {
+		color: var(--fhl-faint);
+	}
+	.help-toggle-row {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 4px;
+		padding-bottom: 10px;
+		padding-left: 4px;
+		padding-right: 4px;
+	}
+	.help-toggle-txt {
+		font-size: 12px;
+		color: var(--fhl-brand);
+	}
+	.help-toggle-arrow {
+		font-size: 11px;
+		color: var(--fhl-brand);
+	}
+	.help-card {
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		margin-bottom: 14px;
+	}
+	.help-step-txt {
+		font-size: 11px;
+		color: var(--fhl-mut);
+		line-height: 1.6em;
+		margin-bottom: 3px;
+	}
+	.security-card {
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: rgba(47, 224, 141, 0.08);
+		border-width: 1px;
+		border-style: solid;
+		border-color: rgba(47, 224, 141, 0.2);
+		margin-top: 12px;
+		margin-bottom: 14px;
+	}
+	.security-txt {
+		font-size: 11px;
+		color: var(--fhl-ele-text);
+		line-height: 1.5em;
+	}
+	.auth-submit-btn {
+		margin-top: 4px;
+		margin-bottom: 12px;
+		border-radius: 16px;
+		min-height: 50px;
+		height: 50px;
+		font-size: 16px;
+	}
+</style>

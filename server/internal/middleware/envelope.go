@@ -72,6 +72,10 @@ func WriteBiz(r *ghttp.Request, err error) {
 		WriteErr(r, http.StatusUnauthorized, "unauthorized", "请先绑定")
 	case strings.HasPrefix(msg, "not_found"):
 		WriteErr(r, http.StatusNotFound, "not_found", "绑定不存在")
+	case errors.Is(err, neta.ErrSMSRejected):
+		WriteErr(r, http.StatusUnauthorized, "sms_invalid", "验证码不正确或已失效")
+	case errors.Is(err, neta.ErrSignRequired):
+		WriteErr(r, http.StatusBadGateway, "sign_required", "官方登录要求签名，算法尚未验证。请改用 refresh_token")
 	case errors.Is(err, neta.ErrTokenInvalid):
 		WriteErr(r, http.StatusUnauthorized, "token_invalid", "请重新填写 refresh_token")
 	case errors.Is(err, neta.ErrDecode):

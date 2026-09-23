@@ -13,18 +13,61 @@ import (
 	"fenghuolun/internal/coded"
 	"fenghuolun/internal/middleware"
 	"fenghuolun/internal/neta"
+	ownersvc "fenghuolun/internal/owner"
 	"fenghuolun/internal/store"
 )
 
-func (c *ControllerV1) Bind(ctx context.Context, req *v1.BindReq) (res *v1.BindRes, err error) {
-	b, err := c.Svc.Bind(strings.TrimSpace(req.RefreshToken))
+func (c *ControllerV1) SmsSend(ctx context.Context, req *v1.SmsSendReq) (res *v1.SmsSendRes, err error) {
+	phone := strings.TrimSpace(req.Phone)
+	if phone == "" {
+		phone, err = c.Svc.AccountPhone(sessionOf(ctx))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := c.Svc.SendLoginCode(phone); err != nil {
+		return nil, err
+	}
+	return &v1.SmsSendRes{Sent: true}, nil
+}
+
+func (c *ControllerV1) Register(ctx context.Context, req *v1.RegisterReq) (res *v1.BindRes, err error) {
+	entered, err := c.Svc.Register(req.Phone, req.Password, req.Code, req.RefreshToken)
 	if err != nil {
 		return nil, err
 	}
-	return &v1.BindRes{
-		Session: b.Session,
-		Vehicle: vehicleMap(b),
-	}, nil
+	return enterRes(entered), nil
+}
+
+func (c *ControllerV1) Login(ctx context.Context, req *v1.LoginReq) (res *v1.BindRes, err error) {
+	entered, err := c.Svc.Login(req.Phone, req.Password)
+	if err != nil {
+		return nil, err
+	}
+	return enterRes(entered), nil
+}
+
+func (c *ControllerV1) BindSMS(ctx context.Context, req *v1.BindSMSReq) (res *v1.BindRes, err error) {
+	b, err := c.Svc.BindBySMS(sessionOf(ctx), req.Code)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.BindRes{Session: b.Session, Bound: true, Vehicle: vehicleMap(b)}, nil
+}
+
+func (c *ControllerV1) Bind(ctx context.Context, req *v1.BindReq) (res *v1.BindRes, err error) {
+	token := strings.TrimSpace(req.RefreshToken)
+	session := sessionOf(ctx)
+	var b *store.Binding
+	if session != "" && (c.Svc.Get(session) != nil || c.Svc.AccountSession(session)) {
+		b, err = c.Svc.BindToken(session, token)
+	} else {
+		b, err = c.Svc.Bind(token)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &v1.BindRes{Session: b.Session, Bound: true, Vehicle: vehicleMap(b)}, nil
 }
 
 func (c *ControllerV1) Rebind(ctx context.Context, req *v1.RebindReq) (res *v1.BindRes, err error) {
@@ -40,13 +83,32 @@ func (c *ControllerV1) Unbind(ctx context.Context, req *v1.UnbindReq) (res *v1.U
 	return &v1.UnbindRes{Unbound: true}, nil
 }
 
-func (c *ControllerV1) Vehicle(ctx context.Context, req *v1.VehicleReq) (res *v1.VehicleRes, err error) {
-	b, err := c.must(ctx)
+func (c *ControllerV1) Logout(ctx context.Context, req *v1.LogoutReq) (res *v1.LogoutRes, err error) {
+	if err := c.Svc.Logout(sessionOf(ctx)); err != nil {
+		return nil, err
+	}
+	return &v1.LogoutRes{LoggedOut: true}, nil
+}
+
+func (c *ControllerV1) AccountPhonePut(ctx context.Context, req *v1.AccountPhonePutReq) (res *v1.AccountPhoneRes, err error) {
+	if err := c.Svc.ChangePhone(sessionOf(ctx), req.Phone, req.Password); err != nil {
+		return nil, err
+	}
+	phone, err := c.Svc.AccountPhone(sessionOf(ctx))
 	if err != nil {
 		return nil, err
 	}
+	return &v1.AccountPhoneRes{Phone: store.MaskPhone(phone)}, nil
+}
+
+func (c *ControllerV1) Vehicle(ctx context.Context, req *v1.VehicleReq) (res *v1.VehicleRes, err error) {
+	b := c.Svc.Get(sessionOf(ctx))
+	if b == nil {
+		return &v1.VehicleRes{Bound: false}, nil
+	}
 	v := vehicleMap(b)
 	return &v1.VehicleRes{
+		Bound:      true,
 		Nickname:   v["nickname"].(string),
 		ModelCode:  v["modelCode"].(string),
 		ModelName:  v["modelName"].(string),
@@ -74,6 +136,7 @@ func (c *ControllerV1) VehiclePut(ctx context.Context, req *v1.VehiclePutReq) (r
 	}
 	v := vehicleMap(nb)
 	return &v1.VehicleRes{
+		Bound:      true,
 		Nickname:   v["nickname"].(string),
 		ModelCode:  v["modelCode"].(string),
 		ModelName:  v["modelName"].(string),
@@ -214,11 +277,26 @@ func (c *ControllerV1) SyncLatest(ctx context.Context, req *v1.SyncLatestReq) (r
 }
 
 func (c *ControllerV1) must(ctx context.Context) (*store.Binding, error) {
-	b := c.Svc.Get(sessionOf(ctx))
+	session := sessionOf(ctx)
+	b := c.Svc.Get(session)
 	if b == nil {
-		return nil, coded.New(http.StatusUnauthorized, "unauthorized", "请先绑定")
+		if c.Svc.AccountSession(session) {
+			return nil, coded.New(http.StatusUnauthorized, "unbound", "请先绑定官方账号")
+		}
+		return nil, coded.New(http.StatusUnauthorized, "unauthorized", "请先登录")
 	}
 	return b, nil
+}
+
+func enterRes(e *ownersvc.Enter) *v1.BindRes {
+	if e == nil {
+		return &v1.BindRes{}
+	}
+	res := &v1.BindRes{Session: e.Session, Bound: e.Bound}
+	if e.Binding != nil {
+		res.Vehicle = vehicleMap(e.Binding)
+	}
+	return res
 }
 
 func sessionOf(ctx context.Context) string {

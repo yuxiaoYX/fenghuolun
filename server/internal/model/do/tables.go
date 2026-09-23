@@ -31,6 +31,7 @@ type OwnerSession struct {
 	g.Meta    `orm:"table:owner_session, do:true"`
 	TokenHash interface{}
 	BindingId interface{}
+	AccountId interface{}
 	CreatedAt interface{}
 	UpdatedAt interface{}
 	DeletedAt interface{}
@@ -58,44 +59,44 @@ type Energy struct {
 }
 
 type SyncJob struct {
-	g.Meta         `orm:"table:sync_job, do:true"`
-	Id             interface{}
-	BindingId      interface{}
-	Kind           interface{}
-	Status         interface{}
-	ErrorPublic    interface{}
-	ErrorInternal  interface{}
-	StartedAt      interface{}
-	FinishedAt     interface{}
-	CreatedAt      interface{}
-	UpdatedAt      interface{}
-	DeletedAt      interface{}
+	g.Meta        `orm:"table:sync_job, do:true"`
+	Id            interface{}
+	BindingId     interface{}
+	Kind          interface{}
+	Status        interface{}
+	ErrorPublic   interface{}
+	ErrorInternal interface{}
+	StartedAt     interface{}
+	FinishedAt    interface{}
+	CreatedAt     interface{}
+	UpdatedAt     interface{}
+	DeletedAt     interface{}
 }
 
 type FillEvent struct {
-	g.Meta       `orm:"table:fill_event, do:true"`
-	Id           interface{}
-	BindingId    interface{}
-	Kind         interface{}
-	Source       interface{}
-	Status       interface{}
-	FromFetched  interface{}
-	ToFetched    interface{}
-	StartedAt    interface{}
-	FinishedAt   interface{}
-	OdoStart     interface{}
-	OdoEnd       interface{}
-	SocStart     interface{}
-	SocEnd       interface{}
-	FuelStart    interface{}
-	FuelEnd      interface{}
-	EnergyKwh    interface{}
-	Liters       interface{}
-	PaidCny      interface{}
-	Note         interface{}
-	CreatedAt    interface{}
-	UpdatedAt    interface{}
-	DeletedAt    interface{}
+	g.Meta      `orm:"table:fill_event, do:true"`
+	Id          interface{}
+	BindingId   interface{}
+	Kind        interface{}
+	Source      interface{}
+	Status      interface{}
+	FromFetched interface{}
+	ToFetched   interface{}
+	StartedAt   interface{}
+	FinishedAt  interface{}
+	OdoStart    interface{}
+	OdoEnd      interface{}
+	SocStart    interface{}
+	SocEnd      interface{}
+	FuelStart   interface{}
+	FuelEnd     interface{}
+	EnergyKwh   interface{}
+	Liters      interface{}
+	PaidCny     interface{}
+	Note        interface{}
+	CreatedAt   interface{}
+	UpdatedAt   interface{}
+	DeletedAt   interface{}
 }
 
 type AppSetting struct {
@@ -123,4 +124,16 @@ type AdminSession struct {
 	CreatedAt interface{}
 	UpdatedAt interface{}
 	DeletedAt interface{}
+}
+
+type OwnerAccount struct {
+	g.Meta       `orm:"table:owner_account, do:true"`
+	Id           interface{}
+	PhoneHash    interface{}
+	PhoneCipher  interface{}
+	PasswordHash interface{}
+	BindingId    interface{}
+	CreatedAt    interface{}
+	UpdatedAt    interface{}
+	DeletedAt    interface{}
 }

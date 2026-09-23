@@ -48,6 +48,15 @@ func (s stubUpstream) QueryEnergyByVin(accessToken, vin string, periodType int) 
 	return os.ReadFile(filepath.Join(s.dir, "energyByVin.sample.json"))
 }
 
+func (s stubUpstream) SendLoginCode(phone string) error { return nil }
+
+func (s stubUpstream) LoginBySMS(phone, code string) (neta.TokenPair, error) {
+	if code != "123456" {
+		return neta.TokenPair{}, neta.ErrSMSRejected
+	}
+	return neta.TokenPair{AccessToken: "test-access", RefreshToken: "sms-refresh-token", ExpiresIn: 604799}, nil
+}
+
 func startOwner(t *testing.T) string {
 	t.Helper()
 	s := g.Server(guid.S())
@@ -622,5 +631,168 @@ func TestAdminSystem(t *testing.T) {
 	defer up.Close()
 	if up.StatusCode == http.StatusOK {
 		t.Fatalf("update must not start outside docker: %s", up.ReadAllString())
+	}
+}
+
+func TestOwnerPhoneRegisterAndLogin(t *testing.T) {
+	prefix := startOwner(t)
+	open, err := g.Client().Get(context.Background(), prefix+"/api/v1/owner/vehicle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Close()
+	if open.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("open vehicle %d %s", open.StatusCode, open.ReadAllString())
+	}
+	sms, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/sms/send", `{"phone":"13800138000"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sms.Close()
+	if sms.StatusCode != http.StatusOK || !strings.Contains(sms.ReadAllString(), `"sent":true`) {
+		t.Fatalf("sms %d %s", sms.StatusCode, sms.ReadAllString())
+	}
+	bad, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"000000"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bad.Close()
+	if bad.StatusCode != http.StatusUnauthorized || !strings.Contains(bad.ReadAllString(), "sms_invalid") {
+		t.Fatalf("bad code %d %s", bad.StatusCode, bad.ReadAllString())
+	}
+	reg, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"123456"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+	regBody := reg.ReadAllString()
+	if reg.StatusCode != http.StatusOK || !strings.Contains(regBody, `"bound":true`) || strings.Contains(regBody, "sms-refresh") {
+		t.Fatalf("register %d %s", reg.StatusCode, regBody)
+	}
+	tokenReg, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13900139000","password":"secret-pass-yy","refresh_token":"direct-refresh-token"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tokenReg.Close()
+	tokenRegBody := tokenReg.ReadAllString()
+	if tokenReg.StatusCode != http.StatusOK || !strings.Contains(tokenRegBody, `"bound":true`) {
+		t.Fatalf("token register %d %s", tokenReg.StatusCode, tokenRegBody)
+	}
+	var tokenEnvelope struct {
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(tokenRegBody), &tokenEnvelope); err != nil || tokenEnvelope.Data.Session == "" {
+		t.Fatalf("token register session %s", tokenRegBody)
+	}
+	phoneChange, err := g.Client().SetHeader("Authorization", "Bearer "+tokenEnvelope.Data.Session).ContentJson().Put(context.Background(), prefix+"/api/v1/owner/account/phone", `{"phone":"13700137000","password":"secret-pass-yy"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phoneChange.Close()
+	if phoneChange.StatusCode != http.StatusOK || !strings.Contains(phoneChange.ReadAllString(), `"phone":"137****7000"`) {
+		t.Fatalf("phone change %d %s", phoneChange.StatusCode, phoneChange.ReadAllString())
+	}
+	var regEnvelope struct {
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(regBody), &regEnvelope); err != nil || regEnvelope.Data.Session == "" {
+		t.Fatalf("register session %s", regBody)
+	}
+	rebind, err := g.Client().SetHeader("Authorization", "Bearer "+regEnvelope.Data.Session).ContentJson().Post(context.Background(), prefix+"/api/v1/owner/bind", `{"refresh_token":"new-refresh-token"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rebind.Close()
+	if rebind.StatusCode != http.StatusOK || !strings.Contains(rebind.ReadAllString(), `"bound":true`) {
+		t.Fatalf("rebind %d %s", rebind.StatusCode, rebind.ReadAllString())
+	}
+	dup, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"123456"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dup.Close()
+	if dup.StatusCode != http.StatusConflict {
+		t.Fatalf("dup %d %s", dup.StatusCode, dup.ReadAllString())
+	}
+	login, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/login", `{"phone":"13800138000","password":"secret-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer login.Close()
+	loginBody := login.ReadAllString()
+	if login.StatusCode != http.StatusOK || !strings.Contains(loginBody, `"bound":true`) {
+		t.Fatalf("login %d %s", login.StatusCode, loginBody)
+	}
+	var loginEnvelope struct {
+		Data struct {
+			Session string `json:"session"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(loginBody), &loginEnvelope); err != nil || loginEnvelope.Data.Session == "" {
+		t.Fatalf("login session %s", loginBody)
+	}
+	logout, err := g.Client().SetHeader("Authorization", "Bearer "+loginEnvelope.Data.Session).ContentJson().Post(context.Background(), prefix+"/api/v1/owner/logout", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logout.Close()
+	if logout.StatusCode != http.StatusOK {
+		t.Fatalf("logout %d %s", logout.StatusCode, logout.ReadAllString())
+	}
+	dead, err := g.Client().SetHeader("Authorization", "Bearer "+loginEnvelope.Data.Session).ContentJson().Post(context.Background(), prefix+"/api/v1/owner/sync", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dead.Close()
+	if dead.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("logged out session %d %s", dead.StatusCode, dead.ReadAllString())
+	}
+	login2, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/login", `{"phone":"13800138000","password":"secret-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer login2.Close()
+	login2Body := login2.ReadAllString()
+	if login2.StatusCode != http.StatusOK || !strings.Contains(login2Body, `"bound":true`) {
+		t.Fatalf("login after logout %d %s", login2.StatusCode, login2Body)
+	}
+	if err := json.Unmarshal([]byte(login2Body), &loginEnvelope); err != nil || loginEnvelope.Data.Session == "" {
+		t.Fatalf("login after logout session %s", login2Body)
+	}
+	sync, err := g.Client().SetHeader("Authorization", "Bearer "+loginEnvelope.Data.Session).ContentJson().Post(context.Background(), prefix+"/api/v1/owner/sync", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sync.Close()
+	if sync.StatusCode != http.StatusOK || !strings.Contains(sync.ReadAllString(), `"status":"ok"`) {
+		t.Fatalf("sync after logout %d %s", sync.StatusCode, sync.ReadAllString())
+	}
+	unbind, err := g.Client().SetHeader("Authorization", "Bearer "+loginEnvelope.Data.Session).ContentJson().Post(context.Background(), prefix+"/api/v1/owner/unbind", "{}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unbind.Close()
+	if unbind.StatusCode != http.StatusOK {
+		t.Fatalf("unbind %d %s", unbind.StatusCode, unbind.ReadAllString())
+	}
+	loginAgain, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/login", `{"phone":"13800138000","password":"secret-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer loginAgain.Close()
+	if loginAgain.StatusCode != http.StatusOK || !strings.Contains(loginAgain.ReadAllString(), `"bound":false`) {
+		t.Fatalf("login after unbind %d %s", loginAgain.StatusCode, loginAgain.ReadAllString())
+	}
+	wrong, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/login", `{"phone":"13800138000","password":"wrong-pass-xx"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrong.Close()
+	if wrong.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong %d %s", wrong.StatusCode, wrong.ReadAllString())
 	}
 }

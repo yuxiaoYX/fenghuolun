@@ -13,6 +13,7 @@ type Config struct {
 	CronSync       string
 	AdminDir       string
 	OwnerDir       string
+	NetaAppKey     string
 }
 
 func Load() Config {
@@ -29,6 +30,7 @@ func Load() Config {
 		CronSync:       os.Getenv("FENGHUOLUN_CRON_SYNC"),
 		AdminDir:       os.Getenv("FENGHUOLUN_ADMIN_DIR"),
 		OwnerDir:       os.Getenv("FENGHUOLUN_OWNER_DIR"),
+		NetaAppKey:     os.Getenv("FENGHUOLUN_NETA_APP_KEY"),
 	}
 }
 

@@ -1,14 +1,18 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, clearSession, bounceIfAuthFailed, envelopeOk, envelopeData, dashUnknown, formatChinaTime, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome, themeOf, setTheme } from '../../common/api.uts'
+	import { ownerRequest, sessionOf, clearSession, bounceIfAuthFailed, envelopeOk, envelopeData, envelopeErrorCode, dashUnknown, formatChinaTime, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome, themeOf, setTheme } from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
 	const isDark = ref(false)
 	const bound = ref(false)
+	const loggedIn = ref(false)
 	const carTitle = ref('尚未绑定')
-	const carMid = ref('从官方哪吒 App 取得 refresh_token')
+	const carSub = ref('')
+	const vinMasked = ref('')
+	const syncText = ref('')
+	const syncOk = ref(true)
 	const nickname = ref('')
 
 	const pick = (obj, key) => {
@@ -20,20 +24,50 @@
 
 	const load = async () => {
 		if (sessionOf() == '') {
+			loggedIn.value = false
 			bound.value = false
-			carTitle.value = '尚未绑定'
-			carMid.value = '从官方哪吒 App 取得 refresh_token'
+			carTitle.value = '尚未登录'
+			carSub.value = '登录后即可管理您的哪吒 L'
+			vinMasked.value = ''
+			syncText.value = ''
 			return
 		}
+		loggedIn.value = true
 		const res = await ownerRequest('GET', '/api/v1/owner/vehicle', null)
-		if (envelopeOk(res) == false) {
-			if (bounceIfAuthFailed(res) == true) {
+		if (envelopeOk(res) == true) {
+			const early = envelopeData(res)
+			if (early != null && early['bound'] == false) {
 				bound.value = false
+				carTitle.value = '尚未绑定'
+				carSub.value = '账号已登录，请绑定官方车辆'
+				vinMasked.value = ''
+				syncText.value = ''
+				return
+			}
+		}
+		if (envelopeOk(res) == false) {
+			if (envelopeErrorCode(res) == 'unbound') {
+				bound.value = false
+				carTitle.value = '尚未绑定'
+				carSub.value = '短信验证码或手填 Token 均可绑定'
+				vinMasked.value = ''
+				syncText.value = ''
+				return
+			}
+			if (bounceIfAuthFailed(res) == true) {
+				loggedIn.value = false
+				bound.value = false
+				carTitle.value = '尚未登录'
+				carSub.value = '登录后即可管理您的哪吒 L'
+				vinMasked.value = ''
+				syncText.value = ''
 				return
 			}
 			bound.value = false
 			carTitle.value = '会话失效'
-			carMid.value = '请重新绑定'
+			carSub.value = '请重新登录或绑定'
+			vinMasked.value = ''
+			syncText.value = ''
 			return
 		}
 		bound.value = true
@@ -41,30 +75,121 @@
 		const model = pick(d, 'modelName')
 		const trim = pick(d, 'trim')
 		const nick = pick(d, 'nickname')
+		const vin = pick(d, 'vinMasked')
+		vinMasked.value = vin == null ? '' : '' + vin
+
 		if (nick != null && nick != '') {
 			nickname.value = '' + nick
 			carTitle.value = '' + nick
 		} else {
 			nickname.value = ''
-			if (trim != null && trim != '') {
-				carTitle.value = '' + model + ' · ' + trim
-			} else {
-				carTitle.value = '' + model
-			}
+			carTitle.value = model == null ? '我的爱车' : '' + model
 		}
-		carMid.value = 'VIN ' + pick(d, 'vinMasked')
+
+		if (trim != null && trim != '') {
+			carSub.value = '' + (model == null ? '' : model + ' · ') + trim
+		} else if (model != null) {
+			carSub.value = '' + model
+		} else {
+			carSub.value = '哪吒 L 纯电/增程'
+		}
+
+		syncText.value = '正在检查同步状态...'
+		syncOk.value = true
 		const sync = await ownerRequest('GET', '/api/v1/owner/sync/latest', null)
 		if (envelopeOk(sync) == true) {
 			const s = envelopeData(sync)
 			const status = dashUnknown(pick(s, 'status'))
 			const at = formatChinaTime(pick(s, 'syncedAt'))
-			carMid.value = 'VIN ' + pick(d, 'vinMasked') + ' · 上次同步 ' + at + ' · ' + status
+			if (status == 'auth_failed' || status == 'token_invalid') {
+				syncText.value = '官方凭证已失效 · 请更换绑定'
+				syncOk.value = false
+			} else {
+				syncText.value = '上次同步 ' + at
+				syncOk.value = true
+			}
+		} else {
+			syncText.value = '暂无同步记录'
+			syncOk.value = true
 		}
 	}
 
+	const goLogin = () => {
+		uni.navigateTo({
+			url: '/pages/login/login'
+		})
+	}
+
 	const goBind = () => {
+		if (sessionOf() == '') {
+			goLogin()
+			return
+		}
 		uni.navigateTo({
 			url: '/pages/bind/bind'
+		})
+	}
+
+	const goAccountPhone = () => {
+		if (sessionOf() == '') {
+			goLogin()
+			return
+		}
+		uni.navigateTo({
+			url: '/pages/account/account'
+		})
+	}
+
+	const confirmLogout = () => {
+		uni.showModal({
+			title: '退出登录',
+			content: '退出仅清理当前手机端登录会话，不会解绑官方车辆。确认退出吗？',
+			success: async (res) => {
+				if (res.confirm != true) {
+					return
+				}
+				if (sessionOf() != '') {
+					await ownerRequest('POST', '/api/v1/owner/logout', null)
+				}
+				clearSession()
+				loggedIn.value = false
+				bound.value = false
+				carTitle.value = '尚未登录'
+				carSub.value = '登录后即可管理您的哪吒 L'
+				vinMasked.value = ''
+				syncText.value = ''
+				uni.showToast({
+					title: '已退出登录',
+					icon: 'none'
+				})
+			}
+		})
+	}
+
+	const confirmUnbind = () => {
+		uni.showModal({
+			title: '解除官方绑定',
+			content: '将删除官方车辆授权凭证。风火轮账号与能耗历史依然保留。确认解绑吗？',
+			confirmColor: '#C2412D',
+			success: async (res) => {
+				if (res.confirm != true) {
+					return
+				}
+				if (sessionOf() != '') {
+					await ownerRequest('POST', '/api/v1/owner/unbind', null)
+				}
+				clearSession()
+				loggedIn.value = false
+				bound.value = false
+				carTitle.value = '尚未登录'
+				carSub.value = '登录后即可管理您的哪吒 L'
+				vinMasked.value = ''
+				syncText.value = ''
+				uni.showToast({
+					title: '已解除绑定',
+					icon: 'none'
+				})
+			}
 		})
 	}
 
@@ -89,8 +214,9 @@
 			return
 		}
 		uni.showModal({
-			title: '车辆备注',
+			title: '修改车辆备注',
 			editable: true,
+			placeholderText: '为您的爱车起个好记的昵称',
 			content: nickname.value,
 			success: async (res) => {
 				if (res.confirm != true) {
@@ -101,12 +227,16 @@
 					nickname: name
 				})
 				if (envelopeOk(out) == true) {
+					uni.showToast({
+						title: '备注已更新',
+						icon: 'success'
+					})
 					load()
 					return
 				}
 				if (bounceIfAuthFailed(out) == false) {
 					uni.showToast({
-						title: '备注没存上',
+						title: '备注更新失败',
 						icon: 'none'
 					})
 				}
@@ -117,19 +247,9 @@
 	const tapAbout = () => {
 		uni.showModal({
 			title: '关于风火轮',
-			content: '风火轮 · 哪吒 L 车友自制 · 非官方 · 无车机 OTA。实时依赖官方云。服务端需设置 FENGHUOLUN_TOKEN_KEK。',
+			content: '风火轮 v0.1.4\n哪吒 L 车友自制开源工具箱。\n纯本地/私有服务守护车辆历史与能耗记账。非官方，无车机 OTA。',
 			showCancel: false
 		})
-	}
-
-	const unbind = async () => {
-		if (sessionOf() != '') {
-			await ownerRequest('POST', '/api/v1/owner/unbind', null)
-		}
-		clearSession()
-		bound.value = false
-		carTitle.value = '尚未绑定'
-		carMid.value = '从官方哪吒 App 取得 refresh_token'
 	}
 
 	const applyChrome = () => {
@@ -159,103 +279,447 @@
 	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
 		<scroll-view class="scroller" direction="vertical">
 		<view class="pad" :style="padStyle">
-			<view class="group" v-if="bound == false">
-				<view class="row" @click="goBind">
-					<view class="row-main">
-						<text class="row-t">{{ carTitle }}</text>
-						<text class="row-s">{{ carMid }}</text>
+			<!-- 顶部车主/座舱 Profile Header -->
+
+			<!-- 状态 1：未登录卡片（单一登录入口） -->
+			<view class="profile-hero-card" v-if="loggedIn == false" @click="goLogin">
+				<view class="hero-left">
+					<view class="hero-avatar">
+						<image class="hero-avatar-img" src="/static/logo.png" />
 					</view>
-					<text class="row-go">去绑定</text>
+					<view class="hero-main">
+						<text class="hero-title">点击登录风火轮</text>
+						<text class="hero-sub">登录后开启爱车远程车况与能耗账本</text>
+					</view>
+				</view>
+				<text class="hero-arrow">›</text>
+			</view>
+
+			<!-- 状态 2：已登录未绑定卡片 -->
+			<view class="unbound-hero-card" v-if="loggedIn == true && bound == false">
+				<view class="unbound-main">
+					<view class="unbound-badge">
+						<text class="unbound-badge-txt">待绑定爱车</text>
+					</view>
+					<text class="unbound-title">尚未绑定哪吒官方车辆</text>
+					<text class="unbound-sub">绑定后即可实时同步车辆状态、电量与续航</text>
+				</view>
+				<view class="unbound-action" @click="goBind">
+					<text class="unbound-action-txt">去绑定</text>
 				</view>
 			</view>
 
-			<view class="group" v-if="bound == true">
-				<view class="row" @click="editNick">
-					<view class="row-main">
-						<text class="row-t">{{ carTitle }}</text>
-						<text class="row-s">{{ carMid }} · 点此改备注</text>
+			<!-- 状态 3：已绑定车辆专属座舱卡片 -->
+			<view class="vehicle-card" v-if="loggedIn == true && bound == true">
+				<view class="vehicle-top-row">
+					<view class="vehicle-title-wrap" @click="editNick">
+						<text class="vehicle-nick">{{ carTitle }}</text>
+						<view class="vehicle-edit-tag">
+							<text class="vehicle-edit-tag-txt">改备注</text>
+						</view>
 					</view>
-					<text class="row-chev">›</text>
+					<view class="tag-badge" :class="syncOk == true ? 'tag-badge-green' : 'tag-badge-warn'">
+						<text class="tag-badge-txt" :class="syncOk == true ? 'tag-badge-green-txt' : 'tag-badge-warn-txt'">
+							{{ syncOk == true ? '连接正常' : '凭证失效' }}
+						</text>
+					</view>
 				</view>
-				<view class="hair"></view>
-				<view class="row" @click="goBind">
-					<view class="row-main">
-						<text class="row-t">更换 refresh_token</text>
-						<text class="row-s">整段粘贴，本机不保存官方令牌</text>
+
+				<text class="vehicle-model">{{ carSub }}</text>
+
+				<view class="vehicle-foot">
+					<view class="vehicle-vin-wrap">
+						<text class="vehicle-vin-lbl">VIN</text>
+						<text class="vehicle-vin-val">{{ vinMasked }}</text>
 					</view>
-					<text class="row-chev">›</text>
-				</view>
-				<view class="hair"></view>
-				<view class="row" @click="unbind">
-					<view class="row-main">
-						<text class="row-t">解绑本机会话</text>
-						<text class="row-s">清本机会话，服务端丢掉加密凭证</text>
-					</view>
-					<text class="row-chev">›</text>
+					<text class="vehicle-sync-time">{{ syncText }}</text>
 				</view>
 			</view>
 
-			<text class="sec-title">外观</text>
-			<view class="theme-row">
-				<view class="theme-pill" :class="isDark == false ? 'theme-pill-on' : ''" @click="chooseTheme('light')">
-					<text class="theme-pill-txt" :class="isDark == false ? 'theme-pill-on-txt' : ''">浅色</text>
+			<!-- 外观主题分段器 -->
+			<text class="sec-title">外观设置</text>
+			<view class="theme-seg-box">
+				<view class="theme-seg-item" :class="isDark == false ? 'theme-seg-active' : ''" @click="chooseTheme('light')">
+					<text class="theme-seg-icon">☀️</text>
+					<text class="theme-seg-txt" :class="isDark == false ? 'theme-seg-active-txt' : ''">浅色 · 晨雾提车</text>
 				</view>
-				<view class="theme-gap"></view>
-				<view class="theme-pill" :class="isDark == true ? 'theme-pill-on' : ''" @click="chooseTheme('dark')">
-					<text class="theme-pill-txt" :class="isDark == true ? 'theme-pill-on-txt' : ''">深色</text>
+				<view class="theme-seg-item" :class="isDark == true ? 'theme-seg-active' : ''" @click="chooseTheme('dark')">
+					<text class="theme-seg-icon">🌙</text>
+					<text class="theme-seg-txt" :class="isDark == true ? 'theme-seg-active-txt' : ''">深色 · 座舱夜航</text>
 				</view>
 			</view>
 
-			<text class="sec-title">记账</text>
+			<!-- 车主数据与记录矩阵 -->
+			<text class="sec-title">车主数据与记录</text>
 			<view class="group">
-				<view class="row" @click="goEnergy">
+				<view class="row menu-row" @click="goEnergy">
+					<view class="menu-icon-box">
+						<text class="menu-icon">⚡</text>
+					</view>
 					<view class="row-main">
 						<text class="row-t">充电 / 加油花费</text>
-						<text class="row-s">按次实付，不是官方账单</text>
-					</view>
-					<text class="row-chev">›</text>
-				</view>
-			</view>
-
-			<text class="sec-title">数据</text>
-			<view class="group">
-				<view class="row" @click="goHistory">
-					<view class="row-main">
-						<text class="row-t">车况历史</text>
-						<text class="row-s">本服务已落库的快照</text>
+						<text class="row-s">按次记录实付花费，统计百公里能耗成本</text>
 					</view>
 					<text class="row-chev">›</text>
 				</view>
 				<view class="hair"></view>
-				<view class="row" @click="notOpen">
+				<view class="row menu-row" @click="goHistory">
+					<view class="menu-icon-box">
+						<text class="menu-icon">🕒</text>
+					</view>
 					<view class="row-main">
-						<text class="row-t">导出 JSON / CSV</text>
-						<text class="row-s">尚未开通</text>
+						<text class="row-t">车况历史快照</text>
+						<text class="row-s">私有服务已归档的电池与里程轨迹</text>
 					</view>
 					<text class="row-chev">›</text>
 				</view>
 				<view class="hair"></view>
-				<view class="row" @click="notOpen">
-					<view class="row-main">
-						<text class="row-t">车控操作留痕</text>
-						<text class="row-s">尚未开通</text>
+				<view class="row menu-row" @click="notOpen">
+					<view class="menu-icon-box">
+						<text class="menu-icon">📊</text>
 					</view>
-					<text class="row-chev">›</text>
+					<view class="row-main">
+						<text class="row-t">数据导出 (JSON / CSV)</text>
+						<text class="row-s">一键备份与导出完整车辆行驶账本</text>
+					</view>
+					<view class="tag-badge tag-badge-dim">
+						<text class="tag-badge-txt">即将上线</text>
+					</view>
+				</view>
+				<view class="hair"></view>
+				<view class="row menu-row" @click="notOpen">
+					<view class="menu-icon-box">
+						<text class="menu-icon">🛡️</text>
+					</view>
+					<view class="row-main">
+						<text class="row-t">车控操作审计留痕</text>
+						<text class="row-s">私有云端记录车锁与空调指令痕迹</text>
+					</view>
+					<view class="tag-badge tag-badge-dim">
+						<text class="tag-badge-txt">即将上线</text>
+					</view>
 				</view>
 			</view>
 
+			<!-- 账号与安全设置（登录后展示） -->
+			<view v-if="loggedIn == true">
+				<text class="sec-title">账号与安全</text>
+				<view class="group">
+					<view class="row menu-row" @click="goAccountPhone">
+						<view class="menu-icon-box">
+							<text class="menu-icon">📱</text>
+						</view>
+						<view class="row-main">
+							<text class="row-t">修改风火轮手机号</text>
+							<text class="row-s">后续官方短信验证码绑定将发送到新手机号</text>
+						</view>
+						<text class="row-chev">›</text>
+					</view>
+					<view class="hair" v-if="bound == true"></view>
+					<view class="row menu-row" v-if="bound == true" @click="goBind">
+						<view class="menu-icon-box">
+							<text class="menu-icon">🔄</text>
+						</view>
+						<view class="row-main">
+							<text class="row-t">更换官方车辆绑定</text>
+							<text class="row-s">官方令牌失效时重换凭证或切换账号</text>
+						</view>
+						<text class="row-chev">›</text>
+					</view>
+				</view>
+			</view>
+
+			<!-- 关于与支持 -->
 			<text class="sec-title">关于</text>
 			<view class="group">
-				<view class="row" @click="tapAbout">
+				<view class="row menu-row" @click="tapAbout">
+					<view class="menu-icon-box">
+						<text class="menu-icon">ℹ️</text>
+					</view>
 					<view class="row-main">
-						<text class="row-t">关于与免责</text>
-						<text class="row-s">非官方 · 无车机 OTA · 云停则无法实时同步</text>
+						<text class="row-t">关于风火轮</text>
+						<text class="row-s">v0.1.4 · 哪吒 L 车友自制 · 开源工具箱</text>
 					</view>
 					<text class="row-chev">›</text>
 				</view>
 			</view>
+
+			<!-- 危险操作区（已登录状态展示） -->
+			<view v-if="loggedIn == true">
+				<text class="sec-title">账号操作</text>
+				<view class="group">
+					<view class="row menu-row" @click="confirmLogout">
+						<view class="menu-icon-box">
+							<text class="menu-icon">🚪</text>
+						</view>
+						<view class="row-main">
+							<text class="row-t">退出当前登录</text>
+							<text class="row-s">仅退出本机登录态，保留官方车辆绑定</text>
+						</view>
+						<text class="row-chev">›</text>
+					</view>
+					<view class="hair" v-if="bound == true"></view>
+					<view class="row menu-row" v-if="bound == true" @click="confirmUnbind">
+						<view class="menu-icon-box">
+							<text class="menu-icon">⚠️</text>
+						</view>
+						<view class="row-main">
+							<text class="row-t row-t-warn">解除官方绑定</text>
+							<text class="row-s">删除官方云端凭证，保留风火轮账号与能耗历史</text>
+						</view>
+						<text class="row-chev">›</text>
+					</view>
+				</view>
+			</view>
+
 			<view class="page-end"></view>
 		</view>
 		</scroll-view>
 	</view>
 </template>
+
+<style>
+	.profile-hero-card {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 20px;
+		padding-right: 18px;
+		padding-bottom: 20px;
+		padding-left: 18px;
+		border-radius: 20px;
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		margin-bottom: 12px;
+	}
+	.hero-left {
+		flex-direction: row;
+		align-items: center;
+		flex: 1;
+	}
+	.hero-avatar {
+		width: 52px;
+		height: 52px;
+		border-radius: 26px;
+		background-color: var(--fhl-pan2);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		align-items: center;
+		justify-content: center;
+		margin-right: 14px;
+	}
+	.hero-avatar-img {
+		width: 38px;
+		height: 38px;
+	}
+	.hero-main {
+		flex: 1;
+	}
+	.hero-title {
+		font-size: 18px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.hero-sub {
+		margin-top: 4px;
+		font-size: 12px;
+		color: var(--fhl-mut);
+	}
+	.hero-arrow {
+		font-size: 22px;
+		color: var(--fhl-faint);
+		margin-left: 8px;
+	}
+	.unbound-hero-card {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 18px;
+		padding-right: 16px;
+		padding-bottom: 18px;
+		padding-left: 16px;
+		border-radius: 20px;
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: rgba(245, 165, 36, 0.35);
+		margin-bottom: 12px;
+	}
+	.unbound-main {
+		flex: 1;
+		padding-right: 8px;
+	}
+	.unbound-badge {
+		align-self: flex-start;
+		padding-top: 2px;
+		padding-bottom: 2px;
+		padding-left: 6px;
+		padding-right: 6px;
+		border-radius: 5px;
+		background-color: rgba(245, 165, 36, 0.15);
+		margin-bottom: 6px;
+	}
+	.unbound-badge-txt {
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--fhl-oil-text);
+	}
+	.unbound-title {
+		font-size: 17px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.unbound-sub {
+		margin-top: 4px;
+		font-size: 11px;
+		color: var(--fhl-mut);
+		line-height: 1.4em;
+	}
+	.unbound-action {
+		padding-top: 8px;
+		padding-bottom: 8px;
+		padding-left: 14px;
+		padding-right: 14px;
+		border-radius: 12px;
+		background-color: var(--fhl-brand);
+	}
+	.unbound-action-txt {
+		font-size: 13px;
+		font-weight: 700;
+		color: #ffffff;
+	}
+	.vehicle-card {
+		padding-top: 18px;
+		padding-right: 16px;
+		padding-bottom: 16px;
+		padding-left: 16px;
+		border-radius: 20px;
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		margin-bottom: 12px;
+	}
+	.vehicle-top-row {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.vehicle-title-wrap {
+		flex-direction: row;
+		align-items: center;
+		flex: 1;
+		margin-right: 8px;
+	}
+	.vehicle-nick {
+		font-size: 19px;
+		font-weight: 800;
+		color: var(--fhl-ink);
+	}
+	.vehicle-edit-tag {
+		padding-top: 2px;
+		padding-bottom: 2px;
+		padding-left: 6px;
+		padding-right: 6px;
+		border-radius: 6px;
+		background-color: var(--fhl-pan2);
+		margin-left: 8px;
+	}
+	.vehicle-edit-tag-txt {
+		font-size: 10px;
+		font-weight: 600;
+		color: var(--fhl-brand);
+	}
+	.vehicle-model {
+		margin-top: 6px;
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.vehicle-foot {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top-width: 1px;
+		border-top-style: solid;
+		border-top-color: var(--fhl-line);
+	}
+	.vehicle-vin-wrap {
+		flex-direction: row;
+		align-items: center;
+	}
+	.vehicle-vin-lbl {
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--fhl-faint);
+		margin-right: 4px;
+	}
+	.vehicle-vin-val {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-ink2);
+	}
+	.vehicle-sync-time {
+		font-size: 11px;
+		color: var(--fhl-faint);
+	}
+	.theme-seg-box {
+		flex-direction: row;
+		background-color: var(--fhl-pan2);
+		border-radius: 14px;
+		padding-top: 4px;
+		padding-right: 4px;
+		padding-bottom: 4px;
+		padding-left: 4px;
+		margin-bottom: 8px;
+	}
+	.theme-seg-item {
+		flex: 1;
+		min-height: 42px;
+		border-radius: 11px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+	.theme-seg-active {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.theme-seg-icon {
+		font-size: 14px;
+		margin-right: 6px;
+	}
+	.theme-seg-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+	}
+	.theme-seg-active-txt {
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.menu-row {
+		min-height: 56px;
+	}
+	.menu-icon-box {
+		width: 32px;
+		height: 32px;
+		border-radius: 9px;
+		background-color: var(--fhl-pan2);
+		align-items: center;
+		justify-content: center;
+		margin-right: 12px;
+	}
+	.menu-icon {
+		font-size: 16px;
+	}
+	.row-t-warn {
+		color: var(--fhl-warn);
+	}
+</style>

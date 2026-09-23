@@ -7,4 +7,6 @@ var (
 	ErrUpstream          = errors.New("neta upstream")
 	ErrDecode            = errors.New("neta decode")
 	ErrTokenInvalid      = errors.New("neta token invalid")
+	ErrSMSRejected       = errors.New("neta sms rejected")
+	ErrSignRequired      = errors.New("neta sign required")
 )

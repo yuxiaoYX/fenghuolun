@@ -8,6 +8,34 @@ import (
 	"fenghuolun/internal/store"
 )
 
+type SmsSendReq struct {
+	g.Meta `path:"/sms/send" method:"post" tags:"Owner" summary:"向官方手机号发登录验证码"`
+	Phone  string `json:"phone" dc:"注册时填写；已登录绑定时可省略"`
+}
+
+type SmsSendRes struct {
+	Sent bool `json:"sent"`
+}
+
+type RegisterReq struct {
+	g.Meta       `path:"/register" method:"post" tags:"Owner" summary:"注册并绑定"`
+	Phone        string `json:"phone"`
+	Password     string `json:"password"`
+	Code         string `json:"code"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type BindSMSReq struct {
+	g.Meta `path:"/bind/sms" method:"post" tags:"Owner" summary:"用官方短信验证码换 refresh_token"`
+	Code   string `json:"code"`
+}
+
+type LoginReq struct {
+	g.Meta   `path:"/login" method:"post" tags:"Owner" summary:"已注册车主用手机号和密码登录"`
+	Phone    string `json:"phone"`
+	Password string `json:"password"`
+}
+
 type BindReq struct {
 	g.Meta       `path:"/bind" method:"post" tags:"Owner" summary:"绑定 refresh_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -26,8 +54,27 @@ type UnbindRes struct {
 	Unbound bool `json:"unbound"`
 }
 
+type LogoutReq struct {
+	g.Meta `path:"/logout" method:"post" tags:"Owner"`
+}
+
+type LogoutRes struct {
+	LoggedOut bool `json:"loggedOut"`
+}
+
+type AccountPhonePutReq struct {
+	g.Meta   `path:"/account/phone" method:"put" tags:"Owner" summary:"修改风火轮账号手机号"`
+	Phone    string `json:"phone"`
+	Password string `json:"password"`
+}
+
+type AccountPhoneRes struct {
+	Phone string `json:"phone"`
+}
+
 type BindRes struct {
 	Session string         `json:"session"`
+	Bound   bool           `json:"bound"`
 	Vehicle map[string]any `json:"vehicle"`
 }
 
@@ -41,6 +88,7 @@ type VehiclePutReq struct {
 }
 
 type VehicleRes struct {
+	Bound      bool   `json:"bound"`
 	Nickname   string `json:"nickname"`
 	ModelCode  string `json:"modelCode"`
 	ModelName  string `json:"modelName"`

@@ -1,0 +1,189 @@
+<script setup>
+	import { ref } from 'vue'
+	import { ownerRequest, envelopeOk, envelopeErrorMessage, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const phone = ref('')
+	const password = ref('')
+	const err = ref('')
+	const busy = ref(false)
+
+	const clearPhone = () => {
+		phone.value = ''
+	}
+
+	const submit = async () => {
+		if (phone.value.trim() == '') {
+			err.value = '请输入新手机号'
+			return
+		}
+		if (phone.value.trim().length != 11) {
+			err.value = '手机号格式不正确（需 11 位）'
+			return
+		}
+		if (password.value == '') {
+			err.value = '请输入当前风火轮账号密码以确认身份'
+			return
+		}
+		err.value = ''
+		busy.value = true
+		const res = await ownerRequest('PUT', '/api/v1/owner/account/phone', {
+			phone: '' + phone.value.trim(),
+			password: password.value
+		})
+		busy.value = false
+		if (res == null) {
+			err.value = '修改没有完成，请稍后重试'
+			return
+		}
+		if (envelopeOk(res) == true) {
+			uni.showToast({
+				title: '手机号已修改',
+				icon: 'success'
+			})
+			setTimeout(() => {
+				uni.navigateBack({ delta: 1 })
+			}, 600)
+			return
+		}
+		const message = envelopeErrorMessage(res)
+		err.value = message == '' ? '修改没有完成，请核对密码' : message
+	}
+
+	onLoad(() => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+		<view class="pad" :style="padStyle">
+			<view class="acc-header">
+				<text class="acc-title">修改风火轮手机号</text>
+				<text class="acc-subtitle">管理用于登录及接收官方绑车验证码的手机号</text>
+			</view>
+
+			<view class="tip-card">
+				<text class="tip-txt">💡 修改后，本风火轮账号的登录名将变更为新手机号；后续进行官方短信绑定时也会向新号码发送验证码。车辆历史数据完整保留。</text>
+			</view>
+
+			<text class="sec-title">身份验证与修改</text>
+			<view class="auth-card">
+				<view class="auth-row">
+					<text class="auth-label">新手机号</text>
+					<input class="auth-input" type="number" maxlength="11" v-model="phone" placeholder="请输入 11 位新手机号" />
+					<view class="auth-clear-btn" v-if="phone.length > 0" @click="clearPhone">
+						<text class="auth-clear-txt">✕</text>
+					</view>
+				</view>
+				<view class="hair"></view>
+				<view class="auth-row">
+					<text class="auth-label">当前密码</text>
+					<input class="auth-input" password v-model="password" placeholder="输入当前密码以核验身份" />
+				</view>
+			</view>
+
+			<view class="alert-card alert-card-err" v-if="err.length > 0">
+				<text class="alert-card-txt alert-card-err-txt">{{ err }}</text>
+			</view>
+
+			<button class="primary auth-submit-btn" :disabled="busy == true" @click="submit">
+				{{ busy == true ? '正在保存...' : '确认修改手机号' }}
+			</button>
+
+			<view class="page-end"></view>
+		</view>
+		</scroll-view>
+	</view>
+</template>
+
+<style>
+	.acc-header {
+		padding-top: 16px;
+		padding-bottom: 16px;
+	}
+	.acc-title {
+		font-size: 22px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.acc-subtitle {
+		margin-top: 5px;
+		font-size: 13px;
+		color: var(--fhl-mut);
+	}
+	.tip-card {
+		padding-top: 10px;
+		padding-right: 12px;
+		padding-bottom: 10px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		margin-bottom: 12px;
+	}
+	.tip-txt {
+		font-size: 12px;
+		color: var(--fhl-mut);
+		line-height: 1.5em;
+	}
+	.auth-card {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		border-radius: 18px;
+		overflow: hidden;
+		margin-bottom: 14px;
+	}
+	.auth-row {
+		flex-direction: row;
+		align-items: center;
+		min-height: 54px;
+		padding-left: 16px;
+		padding-right: 14px;
+	}
+	.auth-label {
+		width: 76px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--fhl-ink);
+	}
+	.auth-input {
+		flex: 1;
+		height: 44px;
+		font-size: 15px;
+		font-weight: 500;
+		color: var(--fhl-ink);
+		border-width: 0px;
+		background-color: transparent;
+	}
+	.auth-clear-btn {
+		width: 26px;
+		height: 26px;
+		border-radius: 13px;
+		background-color: var(--fhl-pan2);
+		align-items: center;
+		justify-content: center;
+		margin-left: 6px;
+	}
+	.auth-clear-txt {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--fhl-mut);
+	}
+
+	.auth-submit-btn {
+		margin-top: 8px;
+		margin-bottom: 16px;
+		border-radius: 16px;
+		min-height: 50px;
+		height: 50px;
+		font-size: 16px;
+	}
+</style>

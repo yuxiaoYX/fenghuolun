@@ -11,7 +11,7 @@ import (
 
 func OwnerAuth(svc *owner.Service) ghttp.HandlerFunc {
 	return func(r *ghttp.Request) {
-		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/bind") {
+		if r.Method == http.MethodPost && ownerPublic(r.URL.Path) {
 			r.Middleware.Next()
 			return
 		}
@@ -20,12 +20,27 @@ func OwnerAuth(svc *owner.Service) ghttp.HandlerFunc {
 			return
 		}
 		token := Bearer(r)
-		if token == "" || svc.Get(token) == nil {
-			WriteErr(r, http.StatusUnauthorized, "unauthorized", "请先绑定")
-			r.ExitAll()
+		if token != "" && svc.Get(token) != nil {
+			r.Middleware.Next()
 			return
 		}
-		r.Middleware.Next()
+		if token != "" && svc.AccountSession(token) {
+			r.Middleware.Next()
+			return
+		}
+		WriteErr(r, http.StatusUnauthorized, "unauthorized", "请先登录")
+		r.ExitAll()
+	}
+}
+
+func ownerPublic(path string) bool {
+	switch {
+	case strings.HasSuffix(path, "/bind"):
+		return true
+	case strings.HasSuffix(path, "/register"), strings.HasSuffix(path, "/login"), strings.HasSuffix(path, "/sms/send"):
+		return true
+	default:
+		return false
 	}
 }
 

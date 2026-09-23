@@ -7,9 +7,15 @@ import (
 )
 
 type IOwnerV1 interface {
+	SmsSend(ctx context.Context, req *v1.SmsSendReq) (res *v1.SmsSendRes, err error)
+	Register(ctx context.Context, req *v1.RegisterReq) (res *v1.BindRes, err error)
+	Login(ctx context.Context, req *v1.LoginReq) (res *v1.BindRes, err error)
+	BindSMS(ctx context.Context, req *v1.BindSMSReq) (res *v1.BindRes, err error)
 	Bind(ctx context.Context, req *v1.BindReq) (res *v1.BindRes, err error)
 	Rebind(ctx context.Context, req *v1.RebindReq) (res *v1.BindRes, err error)
 	Unbind(ctx context.Context, req *v1.UnbindReq) (res *v1.UnbindRes, err error)
+	Logout(ctx context.Context, req *v1.LogoutReq) (res *v1.LogoutRes, err error)
+	AccountPhonePut(ctx context.Context, req *v1.AccountPhonePutReq) (res *v1.AccountPhoneRes, err error)
 	Vehicle(ctx context.Context, req *v1.VehicleReq) (res *v1.VehicleRes, err error)
 	VehiclePut(ctx context.Context, req *v1.VehiclePutReq) (res *v1.VehicleRes, err error)
 	Snapshot(ctx context.Context, req *v1.SnapshotReq) (res *v1.SnapshotRes, err error)

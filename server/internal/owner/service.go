@@ -3,9 +3,11 @@ package owner
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"fenghuolun/internal/clock"
+	"fenghuolun/internal/coded"
 	"fenghuolun/internal/config"
 	"fenghuolun/internal/neta"
 	"fenghuolun/internal/store"
@@ -16,19 +18,24 @@ type Upstream interface {
 	GetCurrentVehicle(accessToken string) ([]byte, error)
 	GetAppVehicleData(accessToken, vin string) ([]byte, error)
 	QueryEnergyByVin(accessToken, vin string, periodType int) ([]byte, error)
+	SendLoginCode(phone string) error
+	LoginBySMS(phone, code string) (neta.TokenPair, error)
 }
 
 type Service struct {
 	Cfg    config.Config
 	Store  *store.SQLite
 	Client Upstream
+	limits attemptBook
 }
 
 func New(cfg config.Config, st *store.SQLite) *Service {
+	client := neta.NewClient()
+	client.AppKey = cfg.NetaAppKey
 	return &Service{
 		Cfg:    cfg,
 		Store:  st,
-		Client: neta.NewClient(),
+		Client: client,
 	}
 }
 
@@ -58,12 +65,37 @@ func (s *Service) Rebind(session, refreshToken string) (*store.Binding, error) {
 	if cur == nil {
 		return nil, fmt.Errorf("unauthorized")
 	}
-	s.Store.Delete(session)
-	return s.Bind(refreshToken)
+	accountID, err := s.Store.AccountBySession(session)
+	if err != nil {
+		return nil, err
+	}
+	pair, err := s.Client.Refresh(refreshToken)
+	if err != nil {
+		return nil, err
+	}
+	live, err := s.pullLive(pair)
+	if err != nil {
+		return nil, err
+	}
+	b, err := s.storeOfficial(pair, accountID, cur.ID, live)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.Store.RevokeSession(session)
+	return b, nil
 }
 
 func (s *Service) Unbind(session string) {
+	accountID, _ := s.Store.AccountBySession(session)
+	b := s.Store.Get(session)
 	s.Store.Delete(session)
+	if b != nil {
+		_ = s.Store.ClearAccountBinding(accountID, b.ID)
+	}
+}
+
+func (s *Service) Logout(session string) error {
+	return s.Store.RevokeSession(session)
 }
 
 func (s *Service) Get(session string) *store.Binding {
@@ -211,4 +243,32 @@ func (s *Service) pullLive(pair neta.TokenPair) (*store.Binding, error) {
 		}
 	}
 	return b, nil
+}
+
+func (s *Service) storeOfficial(pair neta.TokenPair, accountID, preferredID string, b *store.Binding) (*store.Binding, error) {
+	if preferredID != "" {
+		b.ID = preferredID
+	} else if accountID != "" {
+		if acc, err := s.Store.AccountByID(accountID); err == nil && acc != nil && acc.BindingId != "" {
+			if cur := s.Store.GetByIDAny(acc.BindingId); cur != nil && !cur.Disabled {
+				b.ID = cur.ID
+			}
+		}
+	}
+	if b.ID == "" {
+		b.ID = store.NewSessionID()
+	}
+	b.Session = store.NewSessionID()
+	b.RefreshHint = store.HintToken(pair.RefreshToken)
+	if err := s.Store.Put(b); err != nil {
+		return nil, err
+	}
+	if err := s.attachAccount(accountID, b); err != nil {
+		return nil, err
+	}
+	got := s.Store.Get(b.Session)
+	if got == nil {
+		return nil, coded.New(http.StatusBadGateway, "upstream", "绑定已写入但会话没有建立")
+	}
+	return got, nil
 }

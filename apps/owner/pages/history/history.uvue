@@ -6,6 +6,7 @@
 		id : string
 		when : string
 		soc : string
+		socVal : number
 		rangeKm : string
 		odo : string
 		stale : boolean
@@ -29,7 +30,7 @@
 
 	const load = async (reset : boolean) => {
 		if (sessionOf() == '') {
-			note.value = '尚未绑定'
+			note.value = '尚未登录或绑定'
 			rows.value = [] as HistRow[]
 			return
 		}
@@ -44,7 +45,7 @@
 			if (bounceIfAuthFailed(res) == true) {
 				return
 			}
-			note.value = '拉历史失败'
+			note.value = '获取快照数据失败，请检查服务'
 			return
 		}
 		const d = envelopeData(res)
@@ -63,10 +64,22 @@
 			while (i < items.length) {
 				const row = items[i]
 				const fetched = pick(row, 'fetchedAt')
+				const socNum = pick(row, 'socPct')
+				let sVal = 0
+				if (socNum != null) {
+					sVal = Math.round(parseFloat('' + socNum))
+					if (sVal < 0) {
+						sVal = 0
+					}
+					if (sVal > 100) {
+						sVal = 100
+					}
+				}
 				next.push({
 					id: '' + pick(row, 'id'),
 					when: fetched == null ? '—' : '' + fetched,
-					soc: dashInt(pick(row, 'socPct'), '%'),
+					soc: dashInt(socNum, '%'),
+					socVal: sVal,
 					rangeKm: dashNum(pick(row, 'evRangeKm'), ' km'),
 					odo: dashNum(pick(row, 'odometerKm'), ' km'),
 					stale: pick(row, 'stale') == true
@@ -76,9 +89,9 @@
 		}
 		rows.value = next
 		if (next.length == 0) {
-			note.value = '还没有快照'
+			note.value = '暂未收到官方云端车辆快照'
 		} else {
-			note.value = '本服务已存 ' + total.value + ' 笔，不含官方云里未同步的'
+			note.value = '私有服务已落库 ' + total.value + ' 条快照记录'
 		}
 	}
 
@@ -108,22 +121,260 @@
 	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
 		<scroll-view class="scroller" direction="vertical">
 			<view class="pad" :style="padStyle">
-				<text class="meta">{{ note }}</text>
-				<view class="group" v-if="rows.length > 0">
-					<view v-for="(row, i) in rows" :key="row.id">
-						<view class="hair" v-if="i > 0"></view>
-						<view class="row">
-							<view class="row-main">
-								<text class="row-t">{{ row.when }}</text>
-								<text class="row-s">电量 {{ row.soc }} · 纯电 {{ row.rangeKm }} · 里程 {{ row.odo }}</text>
+				<!-- 顶部统计概览 -->
+				<view class="stat-banner">
+					<view class="stat-main">
+						<text class="stat-title">车况快照归档</text>
+						<text class="stat-sub">{{ note }}</text>
+					</view>
+					<view class="stat-badge">
+						<text class="stat-num">{{ total }}</text>
+						<text class="stat-unit">笔</text>
+					</view>
+				</view>
+
+				<!-- 空状态 -->
+				<view class="empty-card" v-if="rows.length == 0 && busy == false">
+					<text class="empty-icon">📊</text>
+					<text class="empty-title">暂无车况历史快照</text>
+					<text class="empty-sub">后台定时任务或手动刷新车况后，将在此沉淀历史轨迹</text>
+				</view>
+
+				<!-- 快照数据卡片流 -->
+				<view class="snap-list" v-if="rows.length > 0">
+					<view class="snap-card" v-for="row in rows" :key="row.id">
+						<!-- 卡片头部时间与状态 -->
+						<view class="snap-head">
+							<view class="snap-time-row">
+								<text class="snap-clock-icon">🕒</text>
+								<text class="snap-time-txt">{{ row.when }}</text>
 							</view>
-							<text class="row-s" v-if="row.stale == true">陈旧</text>
+							<view class="tag-badge" :class="row.stale == true ? 'tag-badge-warn' : 'tag-badge-green'">
+								<text class="tag-badge-txt" :class="row.stale == true ? 'tag-badge-warn-txt' : 'tag-badge-green-txt'">
+									{{ row.stale == true ? '数据陈旧' : '上报正常' }}
+								</text>
+							</view>
+						</view>
+
+						<!-- 卡片核心数据 3 列格 -->
+						<view class="snap-grid">
+							<!-- 电量列 -->
+							<view class="snap-col">
+								<text class="snap-k">剩余电量</text>
+								<text class="snap-v-soc">{{ row.soc }}</text>
+								<view class="snap-track">
+									<view class="snap-fill" :style="'width:' + row.socVal + '%'"></view>
+								</view>
+							</view>
+							<!-- 续航列 -->
+							<view class="snap-col snap-col-border">
+								<text class="snap-k">纯电续航</text>
+								<text class="snap-v">{{ row.rangeKm }}</text>
+							</view>
+							<!-- 里程列 -->
+							<view class="snap-col snap-col-border">
+								<text class="snap-k">总里程</text>
+								<text class="snap-v">{{ row.odo }}</text>
+							</view>
 						</view>
 					</view>
 				</view>
-				<button class="primary" v-if="rows.length < total" :disabled="busy == true" @click="more">更早的快照</button>
+
+				<!-- 分页加载 -->
+				<view class="more-wrap" v-if="rows.length < total">
+					<button class="ghost more-btn" :disabled="busy == true" @click="more">
+						{{ busy == true ? '正在加载...' : '加载更多历史快照 (' + rows.length + '/' + total + ')' }}
+					</button>
+				</view>
+
+				<view class="all-done-wrap" v-if="rows.length >= total && rows.length > 0">
+					<text class="all-done-txt">— 已加载全部历史快照 —</text>
+				</view>
+
 				<view class="page-end"></view>
 			</view>
 		</scroll-view>
 	</view>
 </template>
+
+<style>
+	.stat-banner {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 14px;
+		padding-right: 16px;
+		padding-bottom: 14px;
+		padding-left: 16px;
+		border-radius: 18px;
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		margin-bottom: 12px;
+	}
+	.stat-main {
+		flex: 1;
+	}
+	.stat-title {
+		font-size: 17px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.stat-sub {
+		margin-top: 4px;
+		font-size: 11px;
+		color: var(--fhl-mut);
+	}
+	.stat-badge {
+		flex-direction: row;
+		align-items: baseline;
+		padding-top: 4px;
+		padding-right: 12px;
+		padding-bottom: 4px;
+		padding-left: 12px;
+		border-radius: 12px;
+		background-color: var(--fhl-pan2);
+		margin-left: 10px;
+	}
+	.stat-num {
+		font-size: 20px;
+		font-weight: 800;
+		color: var(--fhl-brand);
+	}
+	.stat-unit {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--fhl-mut);
+		margin-left: 2px;
+	}
+	.empty-card {
+		padding-top: 40px;
+		padding-bottom: 40px;
+		padding-left: 20px;
+		padding-right: 20px;
+		align-items: center;
+		justify-content: center;
+		border-radius: 18px;
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+	}
+	.empty-icon {
+		font-size: 36px;
+		margin-bottom: 12px;
+	}
+	.empty-title {
+		font-size: 15px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.empty-sub {
+		margin-top: 6px;
+		font-size: 12px;
+		color: var(--fhl-mut);
+		text-align: center;
+		line-height: 1.5em;
+	}
+	.snap-list {
+		margin-top: 2px;
+	}
+	.snap-card {
+		background-color: var(--fhl-pan);
+		border-width: 1px;
+		border-style: solid;
+		border-color: var(--fhl-line);
+		border-radius: 18px;
+		padding-top: 12px;
+		padding-right: 14px;
+		padding-bottom: 14px;
+		padding-left: 14px;
+		margin-bottom: 10px;
+	}
+	.snap-head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-bottom: 10px;
+		border-bottom-width: 1px;
+		border-bottom-style: solid;
+		border-bottom-color: var(--fhl-line);
+	}
+	.snap-time-row {
+		flex-direction: row;
+		align-items: center;
+	}
+	.snap-clock-icon {
+		font-size: 12px;
+		margin-right: 6px;
+	}
+	.snap-time-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--fhl-ink2);
+	}
+	.snap-grid {
+		flex-direction: row;
+		align-items: flex-start;
+		padding-top: 10px;
+	}
+	.snap-col {
+		flex: 1;
+		padding-right: 4px;
+	}
+	.snap-col-border {
+		padding-left: 10px;
+		border-left-width: 1px;
+		border-left-style: solid;
+		border-left-color: var(--fhl-line);
+	}
+	.snap-k {
+		font-size: 11px;
+		color: var(--fhl-mut);
+		margin-bottom: 3px;
+	}
+	.snap-v {
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--fhl-ink);
+	}
+	.snap-v-soc {
+		font-size: 15px;
+		font-weight: 800;
+		color: var(--fhl-ele-text);
+	}
+	.snap-track {
+		height: 4px;
+		background-color: var(--fhl-line);
+		border-radius: 2px;
+		margin-top: 5px;
+		overflow: hidden;
+	}
+	.snap-fill {
+		height: 4px;
+		background-color: var(--fhl-ele);
+		border-radius: 2px;
+	}
+	.more-wrap {
+		margin-top: 8px;
+		margin-bottom: 12px;
+	}
+	.more-btn {
+		min-height: 44px;
+		height: 44px;
+		border-radius: 14px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.all-done-wrap {
+		padding-top: 14px;
+		padding-bottom: 8px;
+		align-items: center;
+		justify-content: center;
+	}
+	.all-done-txt {
+		font-size: 11px;
+		color: var(--fhl-faint);
+	}
+</style>

@@ -32,7 +32,7 @@
 - 车主只用 uni-app x **蒸汽模式**前台（`manifest.json` → `uni-app-x.vapor: true`，不是 Steam 皮肤）
 - 管理员只用 Vue3 Web + antdv-next 1.5.x；不要 Naive / Element / gf-vue-admin / `antdv init`
 - Go **GoFrame v2** 后端；SQLite；浏览器不直连官方
-- 车主填 `refresh_token`，不开发官方短信登录、不开发车主注册页
+- 车主可手机号 + 本服务密码 + 官方短信验证码注册并换 `refresh_token`；也可只贴 `refresh_token`。不编造 sign
 - 本服务仍要车主会话 + 管理员会话 + 车辆归属校验
 - 不做 OTA、不做数字钥匙、未有闭环前不做车控
 - 未知值保持未知；`fetchedAt` ≠ `reportedAt`；对外时间是北京时间墙钟（D22），前台不换算；能耗独立建模；位置仅存最新一个点（D17 修订，不存轨迹）

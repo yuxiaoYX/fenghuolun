@@ -24,6 +24,7 @@ type Binding struct {
 type OwnerSession struct {
 	TokenHash string
 	BindingId string
+	AccountId string
 	CreatedAt int64
 	UpdatedAt int64
 	DeletedAt int64
@@ -109,4 +110,15 @@ type AdminSession struct {
 	CreatedAt int64
 	UpdatedAt int64
 	DeletedAt int64
+}
+
+type OwnerAccount struct {
+	Id           string
+	PhoneHash    string
+	PhoneCipher  []byte
+	PasswordHash string
+	BindingId    string
+	CreatedAt    int64
+	UpdatedAt    int64
+	DeletedAt    int64
 }

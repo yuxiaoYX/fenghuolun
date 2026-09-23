@@ -17,6 +17,7 @@ const (
 type Client struct {
 	AppBase    string
 	EnergyBase string
+	AppKey     string
 	HTTP       *http.Client
 }
 

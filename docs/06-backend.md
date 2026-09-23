@@ -80,9 +80,15 @@
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `POST` | `/api/v1/owner/bind` | body: `{ "refresh_token": "..." }`，成功返回本服务会话 |
+| `POST` | `/api/v1/owner/register` | `{ "phone", "password", "code" }` 或 `{ "phone", "password", "refresh_token" }`。创建本服务账号并完成官方绑定，二选一 |
+| `POST` | `/api/v1/owner/login` | `{ "phone", "password" }`。只换本服务会话。未绑定车辆时 `bound=false` |
+| `POST` | `/api/v1/owner/sms/send` | `{ "phone" }`。注册页可直接调用。服务端向官方 `sendCodeAndSignCheck` 发码。成功后 60 秒内不可重发 |
+| `POST` | `/api/v1/owner/bind/sms` | `{ "code" }`。需登录，短信发送到当前风火轮账号手机号；官方验证码登录换 `refresh_token` 并绑到当前账号 |
+| `POST` | `/api/v1/owner/bind` | body: `{ "refresh_token": "..." }`。不调用官方登录。已登录时绑到当前账号 |
 | `POST` | `/api/v1/owner/rebind` | 重新填写 refresh_token |
 | `POST` | `/api/v1/owner/unbind` | 删除凭证与会话，快照是否保留可配置，默认保留历史、删凭证 |
+| `POST` | `/api/v1/owner/logout` | 退出当前风火轮会话，不删除官方车辆绑定 |
+| `PUT` | `/api/v1/owner/account/phone` | `{ "phone", "password" }`。验证当前密码后修改风火轮账号手机号 |
 | `GET` | `/api/v1/owner/vehicle` | 当前绑定摘要 |
 | `PUT` | `/api/v1/owner/vehicle` | `{ "nickname" }`，最多 32 字；同步不覆盖车主备注 |
 | `GET` | `/api/v1/owner/snapshot/latest` | 最新解码快照；另带计算字段 `stale`（上报超过 `stale_after_sec`，默认 7200） |
@@ -95,7 +101,7 @@
 | `GET` | `/api/v1/owner/sync/latest` | 最近一次任务状态 |
 
 车主请求头：`Authorization: Bearer <owner_session>`。  
-`bind` 例外：无会话。
+`bind`、`register`、`login`、`sms/send` 例外：无会话。`bind/sms` 必须先登录。
 
 ### 管理员
 
@@ -133,7 +139,7 @@
    - 能耗两接口在 `https://api.chehezhi.cn`
 3. 换票：`refreshApiToken` 已探活（V1）。`ErrRefreshUnverified` 仅作历史类型；禁止再猜其它换票 URL。
 4. 官方业务码：主接口样本为 `code == 20000` 且数据在 `data`；数字钥匙是另一套信封，本期不接。
-5. 请求头：HAR 见 `appId, appKey, timestamp, nonce, sign, Authorization` 等。未证明必要性之前，实现要可配置；**sign 算法未验证则标阻塞，禁止臆造 HMAC 糊弄联调。**
+5. 请求头：HAR 见 `appId, appKey, timestamp, nonce, sign, Authorization` 等。短信登录只带 HAR 里不变的 `appId` / `appVersion` / `channel` / `login_channel`。**sign 算法未验证，禁止臆造 HMAC。** 官方若因缺签名拒绝，返回 `sign_required`，车主改贴 `refresh_token`。
 6. 解码与 HTTP 分文件：`client.go` / `decode_vehicle.go` / `decode_energy.go`。
 7. 单测只跑 `testdata/neta/*.json` 脱敏样例。HTTP 测试注入假上游，禁止把假数据当产品绑定路径。
 

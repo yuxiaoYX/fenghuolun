@@ -18,6 +18,7 @@ type Client struct {
 	AppBase    string
 	EnergyBase string
 	AppKey     string
+	AppSecret  string
 	HTTP       *http.Client
 }
 

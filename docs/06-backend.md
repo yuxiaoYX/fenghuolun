@@ -21,7 +21,7 @@
 | `FENGHUOLUN_ADMIN_BOOTSTRAP_USER` | 仅当库中无管理员时创建 |
 | `FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD` | 同上 |
 | `FENGHUOLUN_CORS_ORIGINS` | 空库写入 `app_settings` 的缺省；之后以后台设置为准 |
-| `FENGHUOLUN_CRON_SYNC` | 同上。默认关；如 `15m`。改后台后热替换 gcron，不必重启 |
+| `FENGHUOLUN_CRON_SYNC` | 同上。默认 `15m`，每 15 分钟追加一条车况快照；设为 `off` 关闭。改后台后热替换 gcron，不必重启 |
 | `FENGHUOLUN_NETA_SCALE` | 默认关（续航/电压为 —）。`candidate` 启用 `/10` 并带 decodeWarnings |
 | `FENGHUOLUN_ADMIN_DIR` | 可选。管理端 `pnpm --dir apps/admin build` 的 `dist`。同端口 `/admin/`。空则不托管，开发用 Vite `:5173` |
 | `FENGHUOLUN_OWNER_DIR` | 可选。车主 H5（`pwsh -File apps/owner/build-h5.ps1` 的 `h5-dist`）。同端口 `/`。空则不托管，开发用 `pnpm owner:h5` |
@@ -82,8 +82,8 @@
 |---|---|---|
 | `POST` | `/api/v1/owner/register` | `{ "phone", "password", "code" }` 或 `{ "phone", "password", "refresh_token" }`。创建本服务账号并完成官方绑定，二选一 |
 | `POST` | `/api/v1/owner/login` | `{ "phone", "password" }`。只换本服务会话。未绑定车辆时 `bound=false` |
-| `POST` | `/api/v1/owner/sms/send` | `{ "phone" }`。注册页可直接调用。服务端向官方 `sendCodeAndSignCheck` 发码。成功后 60 秒内不可重发 |
-| `POST` | `/api/v1/owner/bind/sms` | `{ "code" }`。需登录，短信发送到当前风火轮账号手机号；官方验证码登录换 `refresh_token` 并绑到当前账号 |
+| `POST` | `/api/v1/owner/sms/send` | 服务端使用运行时 `FENGHUOLUN_NETA_APP_SECRET` 计算官方 SHA-256 签名后发码；未配置密钥时返回 `sign_required` |
+| `POST` | `/api/v1/owner/bind/sms` | 服务端使用同一签名流程调用官方验证码登录并换取长期凭证 |
 | `POST` | `/api/v1/owner/bind` | body: `{ "refresh_token": "..." }`。不调用官方登录。已登录时绑到当前账号 |
 | `POST` | `/api/v1/owner/rebind` | 重新填写 refresh_token |
 | `POST` | `/api/v1/owner/unbind` | 删除凭证与会话，快照是否保留可配置，默认保留历史、删凭证 |
@@ -92,7 +92,7 @@
 | `GET` | `/api/v1/owner/vehicle` | 当前绑定摘要 |
 | `PUT` | `/api/v1/owner/vehicle` | `{ "nickname" }`，最多 32 字；同步不覆盖车主备注 |
 | `GET` | `/api/v1/owner/snapshot/latest` | 最新解码快照；另带计算字段 `stale`（上报超过 `stale_after_sec`，默认 7200） |
-| `GET` | `/api/v1/owner/snapshots` | 本服务快照摘要分页；无完整 VIN |
+| `GET` | `/api/v1/owner/snapshots` | 本服务快照摘要分页；无完整 VIN。默认每 15 分钟采集，补能识别依赖这些带时间戳的记录 |
 | `GET` | `/api/v1/owner/energy?type=1` | 官方能耗、油量差分、充能记录、实付合计、容量反推 |
 | `GET` | `/api/v1/owner/fills` | 充电/加油列表 |
 | `POST` | `/api/v1/owner/fills` | 手补一条 |
@@ -102,6 +102,8 @@
 
 车主请求头：`Authorization: Bearer <owner_session>`。  
 `bind`、`register`、`login`、`sms/send` 例外：无会话。`bind/sms` 必须先登录。
+
+历史车况只能从启用定时同步后开始累积；官方接口没有可依赖的历史 SOC/油量回放，因此无法把启用前的空白快照补成真实记录。
 
 ### 管理员
 
@@ -132,14 +134,14 @@
 
 ## `internal/neta` 规则
 
-1. **先证据后代码。** 路径、方法、Content-Type 以 HAR 已成功条目为准。
+1. **先证据后代码。** 路径、方法、Content-Type 以 HAR 已成功条目为准。IPA 6.4.5 静态路径见 `09-protocol-neta.md` / 本机 `HAR-ANALYSIS.md` §6.1，打出业务成功前不得当默认实现。
 2. 已证实（只读，见 `09-protocol-neta.md`）：
    - `POST /pivot/mds-api/vehicleAccount/1.0/getCurrentVehicle`
    - `POST /pivot/veh-status/vehicle-status-control/1.0/getAppVehicleData`
    - 能耗两接口在 `https://api.chehezhi.cn`
 3. 换票：`refreshApiToken` 已探活（V1）。`ErrRefreshUnverified` 仅作历史类型；禁止再猜其它换票 URL。
 4. 官方业务码：主接口样本为 `code == 20000` 且数据在 `data`；数字钥匙是另一套信封，本期不接。
-5. 请求头：HAR 见 `appId, appKey, timestamp, nonce, sign, Authorization` 等。短信登录只带 HAR 里不变的 `appId` / `appVersion` / `channel` / `login_channel`。**sign 算法未验证，禁止臆造 HMAC。** 官方若因缺签名拒绝，返回 `sign_required`，车主改贴 `refresh_token`。
+5. 请求头：短信请求带 `appId, appKey, timestamp, nonce, sign, channel, appVersion, login_channel, phoneModel`。`sign` 来自 IPA `HZRequestInterceptor`：`METHOD+PATH` + 小写 `k:v`（appid/appkey/nonce/timestamp + 表单/query；JSON 为 `json:`+正文）+ `APP_SECRET`，percent-encode 后 SHA-256。HAR #58 发码已绿。密钥缺失时返回 `sign_required`。
 6. 解码与 HTTP 分文件：`client.go` / `decode_vehicle.go` / `decode_energy.go`。
 7. 单测只跑 `testdata/neta/*.json` 脱敏样例。HTTP 测试注入假上游，禁止把假数据当产品绑定路径。
 
@@ -149,7 +151,8 @@
 |---|---|
 | `appapi-pki.chehezhi.cn:18443` | 登录、车辆、车况 |
 | `api.chehezhi.cn` | 能耗 |
-| `certapi-pki.chehezhi.cn:18444` | 证书，样本 400 缺客户端证书 |
+| `certapi-pki.chehezhi.cn:18444` | 证书，样本 400 缺客户端证书。IPA 另有 `appapi-pki:18444` 与 `getTime`/`updateCert` |
+| `charging-api-v2.hozonauto.com` | IPA 充电记录主机，HAR 未访问 |
 | `h5-battery.chehezhi.cn` | 官方 H5，浏览器 CORS 只允许它，与本服务无关 |
 
 ---

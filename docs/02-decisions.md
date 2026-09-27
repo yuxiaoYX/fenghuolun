@@ -70,7 +70,7 @@
 登录和注册是两条独立流程；注册页把官方绑定放在手机号、密码下面二选一。
 
 1. 注册：手机号 + 本服务密码，并选择一种官方绑定方式：
-   - 短信验证码：服务端调官方发码和验证码登录，保存返回的 `refresh_token`
+   - 短信验证码：服务端使用环境变量注入的官方签名密钥完成发码与登录；未配置时使用 `refresh_token`
    - 手填 `refresh_token`：不调用官方登录接口
 2. 登录：手机号 + 密码，只换本服务会话；已绑定进入车况，未绑定进入绑定页
 3. 已登录后更换绑定仍走绑定页，不再填密码
@@ -78,7 +78,7 @@
 
 换票若返回新的 Refresh Token，必须保存新值。
 
-官方 `sign` 算法仍未验证（V2）。发码和验证码登录按 HAR 已成功的路径和字段发送，**不附带、也不编造** `sign` / `appKey`。若官方因缺签名拒绝，前台提示改用 `refresh_token`，不得假装短信登录已完全接通。
+官方 `sign` 使用运行时密钥按 IPA `HZRequestInterceptor` 计算：`METHOD+PATH+appid:appkey:nonce:timestamp` + 表单/query 的 `k:v`（JSON 为 `json:`+正文）+ `APP_SECRET`，再 percent-encode 后 SHA-256。HAR #58 发码已绿。密钥缺失时返回 `sign_required`，前台可改用 `refresh_token`。
 
 ## D08 本服务会话 — 锁定
 
@@ -94,7 +94,7 @@
 
 ## D10 官方接口与第三方接口分离 — 锁定
 
-哪吒官方 App 接口（HAR 证据）与任何第三方网站（含车况雷达）的接口、字段、路径、userId 规则 **禁止混用**。`vehicleId`、VIN、官方账号 id 是不同字段。
+哪吒官方 App 接口（HAR 已证实响应 + IPA 静态路径）与任何第三方网站（含车况雷达）的接口、字段、路径、userId 规则 **禁止混用**。`vehicleId`、VIN、官方账号 id 是不同字段。IPA 字符串不得覆盖 HAR 里已经成功的方法/字段。
 
 ## D11 不做 OTA、不宣称续命车机 — 锁定 / 禁止
 
@@ -163,7 +163,7 @@ HAR **没有** 官方用油升数、纯电里程、增程里程。禁止把官�
 |---|---|
 | 本文件 vs 聊天记忆 / 旧 README | 本文件 |
 | 产品范围 vs 旧 `src/` | 本文件 + `01-product.md` |
-| 官方 path/字段 vs 任何文档 | 本机 `HAR-ANALYSIS.md` 的抓包证据（不进仓库）；无证据则标待验证 |
+| 官方 path/字段 vs 任何文档 | 本机 `HAR-ANALYSIS.md`（HAR 已成功 + IPA 静态，不进仓库）；无证据则标待验证。已成功响应赢 IPA 字符串 |
 | 想「顺便」加会员/轨迹/短信登录 | 先改本文件，否则视为违规 |
 
 无证据的协议细节用占位名 `TARGET` / `PATH_REFRESH` 等，禁止编造成已验证路径。
@@ -189,11 +189,11 @@ HAR **没有** 官方用油升数、纯电里程、增程里程。禁止把官�
 | ID | 事项 | 现状 |
 |---|---|---|
 | V1 | Refresh Token 换票 | **已探活**：`POST /customer/account/info/refreshApiToken`，表单 `refreshToken`。HAR 仍无此条。见 `09-protocol-neta.md` |
-| V2 | 主 App `sign` 算法 | 仅见 64 位 hex，算法未知，禁止编造签名器冒充已完成 |
+| V2 | 主 App `sign` 算法 | **HAR #58 已绿**：`METHOD+PATH` + 小写 `k:v` 头（appid/appkey/nonce/timestamp）+ 表单/query 同样拼接 + JSON 时 `json:`+正文 + `APP_SECRET`，`urlQueryAllowed` 去掉 `:#[]@?/!$&'()+,;=~` 后 SHA-256。密钥仅 `FENGHUOLUN_NETA_APP_SECRET`；缺则 `sign_required` |
 | V3 | 车况字段缩放 | **已证实**：胎压 `/55` 截 2 位（App 显示时再截 1 位）、胎温 `-50`、空调 `(raw-110)/2`、里程 `/10`、续航 `/10`、电压 `/10`、12V `/10`。**强候选**：电流 GB/T 32960 先验 `(raw-10000)/10`，仍输出 null，等充/放/回收三态路试。国标仅作先验——其温度偏移 −40 已被胎温实测证伪（实为 −50） |
 | V4 | 充电/门锁/车窗枚举 | **关闭侧已对照**：门/锁 `0`、四窗 `16`、天窗 `0` → closed。开侧未见。充电仍未知 |
-| V5 | 车辆健康 `getVehicleHealth` | 只有 JS 线索，无成功响应 |
-| V6 | 多车列表 | HAR 只有「当前车辆」 |
+| V5 | 车辆健康 | H5：`getVehicleHealth`。IPA 原生：`getVehicleHealthRecord`。都无成功响应，路径不要混 |
+| V6 | 多车列表 | HAR 只有当前车。IPA：`/pivot/mds-api/vehicleAccount/1.0/listBindVehicle`（及 bind/unbind），未探活 |
 | V7 | 蒸汽模式在目标 uni-app x 版本上的平台支持矩阵 | 以当时官方文档为准 |
 | V8 | 哪吒 L 油箱容积、油量百分比刻度 | 用于把 `fuelPct` 差分成升；未对照前界面以百分点为主 |
 
@@ -225,4 +225,5 @@ HAR **没有** 官方用油升数、纯电里程、增程里程。禁止把官�
 | 2026-09-22 | 一点更新改为下载 Release 程序包（二进制 + 管理端 + 车主页）到数据卷 `app/current`，进程退出后由 `restart: unless-stopped` 拉起。不需要 docker.sock。没有程序包时才退回镜像重建。不做自动定时升级 |
 | 2026-09-21 | 后台更新同时看 git tag 与 GitHub Release，取最高 `v*`；打 tag 的 workflow 会自动 Publish Release，避免只推 tag 时 `/releases/latest` 停在旧版 |
 | 2026-09-21 | 车主前台当前只交付 H5，与 Go 同端口 `/`；管理端改挂 `/admin/`。暂不编 App / 安装包。H5 打进生产镜像，后台一点更新会连前台一起换 |
-| 2026-09-22 | D07：车主可用手机号 + 本服务密码 + 官方短信验证码注册并换 `refresh_token`。已注册后可密码登录。不编造 sign。粘贴 `refresh_token` 保留 |
+| 2026-09-22 | D07：车主使用手机号 + 本服务密码 + 官方短信验证码或 `refresh_token` 注册与绑定；签名密钥仅运行时注入。已注册后可密码登录 |
+| 2026-09-25 | V2/V5/V6：对照 iOS IPA 6.4.5。sign 拼串与生产密钥位置已从 `HZRequestInterceptor` 取出；HAR 向量未绿。健康原生 path 为 `getVehicleHealthRecord`。多车 `listBindVehicle`。附录 `HAR-ANALYSIS.md` §6.1 |

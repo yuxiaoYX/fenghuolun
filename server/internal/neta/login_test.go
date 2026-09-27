@@ -17,7 +17,7 @@ func TestDecodeLoginToken(t *testing.T) {
 	}
 }
 
-func TestSendLoginCodeOmitsSign(t *testing.T) {
+func TestSendLoginCodeSignsForm(t *testing.T) {
 	var header http.Header
 	var body string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,23 +34,82 @@ func TestSendLoginCodeOmitsSign(t *testing.T) {
 	c := NewClient()
 	c.AppBase = srv.URL
 	c.HTTP = srv.Client()
+	c.AppKey = "test-app-key"
+	c.AppSecret = "test-secret"
 	if err := c.SendLoginCode("13800138000"); err != nil {
 		t.Fatal(err)
 	}
-	if header.Get("sign") != "" || header.Get("appKey") != "" || header.Get("Cookie") != "" || header.Get("Authorization") != "" {
-		t.Fatalf("must not invent sign or copy secrets: %#v", header)
+	if header.Get("sign") == "" || header.Get("appKey") != "test-app-key" || header.Get("phoneModel") == "" || header.Get("Cookie") != "" || header.Get("Authorization") != "" {
+		t.Fatalf("missing signed headers: %#v", header)
 	}
 	if header.Get("appId") != accountAppID || header.Get("login_channel") != accountLoginCh {
 		t.Fatalf("missing evidenced static headers: %#v", header)
+	}
+	if !strings.Contains(header.Get("User-Agent"), "CHZ/6.4.5") {
+		t.Fatalf("ua %q", header.Get("User-Agent"))
 	}
 	if body != "phone=13800138000" {
 		t.Fatalf("body %q", body)
 	}
 }
 
+func TestSignRequestSendCodeVector(t *testing.T) {
+	got := signRequest(
+		"POST",
+		"/pivot/account/2.0/sendCodeAndSignCheck",
+		map[string]string{
+			"appId":     accountAppID,
+			"appKey":    "test-app-key",
+			"nonce":     "4944849486",
+			"timestamp": "1788966309835",
+		},
+		map[string]string{"phone": "13800138000"},
+		nil,
+		"test-secret",
+	)
+	const want = "52ca5b1aae8a8789bbbb9448986a198fd7aeb3049c91f29ed6c7cc49bd886639"
+	if got != want {
+		t.Fatalf("sign=%s want=%s", got, want)
+	}
+}
+
+func TestAccountHeadersRequireRuntimeKeys(t *testing.T) {
+	c := NewClient()
+	req, err := http.NewRequest(http.MethodPost, "http://example.test"+PathSendCode, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.accountHeaders(req, map[string]string{"phone": "13800138000"}, nil); !errors.Is(err, ErrSignRequired) {
+		t.Fatalf("empty keys: %v", err)
+	}
+	c.AppSecret = "test-secret"
+	if err := c.accountHeaders(req, map[string]string{"phone": "13800138000"}, nil); !errors.Is(err, ErrSignRequired) {
+		t.Fatalf("empty appKey: %v", err)
+	}
+}
+
+func TestSignRequestJSONPrefix(t *testing.T) {
+	got := signRequest("POST", "/x",
+		map[string]string{"appId": "A", "appKey": "B", "nonce": "1", "timestamp": "2"},
+		nil, []byte(`{"phone":"1"}`), "secret")
+	if got != signRequest("POST", "/x",
+		map[string]string{"appId": "A", "appKey": "B", "nonce": "1", "timestamp": "2"},
+		nil, []byte(`{"phone":"1"}`), "secret") {
+		t.Fatal(got)
+	}
+	plain := signRequest("POST", "/x",
+		map[string]string{"appId": "A", "appKey": "B", "nonce": "1", "timestamp": "2"},
+		map[string]string{"phone": "1"}, nil, "secret")
+	if got == plain {
+		t.Fatal("json body must change sign")
+	}
+}
+
 func TestLoginBySMSBody(t *testing.T) {
 	var rawBody string
+	var header http.Header
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header.Clone()
 		b, _ := io.ReadAll(r.Body)
 		rawBody = string(b)
 		w.Header().Set("Content-Type", "application/json")
@@ -60,6 +119,8 @@ func TestLoginBySMSBody(t *testing.T) {
 	c := NewClient()
 	c.AppBase = srv.URL
 	c.HTTP = srv.Client()
+	c.AppKey = "test-app-key"
+	c.AppSecret = "test-secret"
 	pair, err := c.LoginBySMS("13800138000", "123456")
 	if err != nil || pair.RefreshToken != "ref" {
 		t.Fatal(err, pair)
@@ -68,6 +129,9 @@ func TestLoginBySMSBody(t *testing.T) {
 		if !strings.Contains(rawBody, part) {
 			t.Fatalf("body missing %s: %s", part, rawBody)
 		}
+	}
+	if header.Get("sign") == "" || header.Get("timestamp") == "" || header.Get("nonce") == "" {
+		t.Fatalf("missing signed JSON headers: %#v", header)
 	}
 }
 

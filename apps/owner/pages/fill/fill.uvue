@@ -17,6 +17,11 @@
 	const note = ref('')
 	const hint = ref('')
 	const whenTxt = ref('')
+	const eventTime = ref('')
+	const startedTxt = ref('')
+	const isDraft = ref(false)
+	const isAuto = ref(false)
+	const sourceTxt = ref('手工记录')
 	const unitTxt = ref('')
 	const err = ref('')
 	const busy = ref(false)
@@ -63,6 +68,12 @@
 		note.value = pick(d, 'note') == null ? '' : '' + pick(d, 'note')
 		const finished = pick(d, 'finishedAt')
 		whenTxt.value = finished == null ? '' : '' + finished
+		eventTime.value = whenTxt.value
+		const started = pick(d, 'startedAt')
+		startedTxt.value = started == null ? '' : '' + started
+		isDraft.value = pick(d, 'status') == 'draft'
+		isAuto.value = pick(d, 'source') == 'auto'
+		sourceTxt.value = isAuto.value ? '系统识别' : '手工记录'
 		const unit = pick(d, 'unitCny')
 		if (unit != null) {
 			unitTxt.value = kind.value == 'refuel' ? '折合 ' + unit + ' 元/升' : '折合 ' + unit + ' 元/度'
@@ -71,7 +82,7 @@
 		}
 		const st = pick(d, 'status')
 		if (st == 'draft') {
-			hint.value = '待补花费。预填来自快照，可改。'
+			hint.value = isAuto.value ? '系统根据历史快照识别出的补能过程。请补充账单，状态值可改。' : '账单信息未补齐，可以现在填写，也可以之后再补。'
 		} else {
 			hint.value = '已记账。改实付后保存。'
 		}
@@ -85,20 +96,21 @@
 	}
 
 	const prefillLatest = async () => {
-		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
-		if (envelopeOk(res) == false) {
-			return
-		}
-		const d = envelopeData(res)
-		const soc = numTxt(pick(pick(d, 'power'), 'socPct'))
-		const fuel = numTxt(pick(pick(d, 'extender'), 'fuelPct'))
-		odoEnd.value = numTxt(pick(d, 'odometerKm'))
-		socEnd.value = soc
-		fuelEnd.value = fuel
+		isDraft.value = false
+		isAuto.value = false
+		sourceTxt.value = '手工记录'
+		startedTxt.value = ''
+		whenTxt.value = ''
+		eventTime.value = ''
+		odoEnd.value = ''
+		socStart.value = ''
+		socEnd.value = ''
+		fuelStart.value = ''
+		fuelEnd.value = ''
 		if (kind.value == 'charge') {
-			hint.value = '手补充电。电量来自最新快照，可改。实付才入账。'
+			hint.value = '没有识别到历史充电过程。请按账单填写时间，电量状态可留空。'
 		} else {
-			hint.value = '手补加油。油量来自最新快照，可改。实付才入账。'
+			hint.value = '没有识别到历史加油过程。请按账单填写时间，油量状态可留空。'
 		}
 		setTitle()
 	}
@@ -140,6 +152,7 @@
 			kind: kind.value,
 			paidCny: p,
 			odoEnd: parseNum(odoEnd.value),
+			finishedAt: eventTime.value.trim(),
 			note: note.value
 		}
 		if (kind.value == 'charge') {
@@ -218,7 +231,12 @@
 		<scroll-view class="scroller" direction="vertical">
 			<view class="pad" :style="padStyle">
 				<text class="meta">{{ hint }}</text>
-				<text class="note" v-if="whenTxt.length > 0">{{ whenTxt }}</text>
+				<view class="fill-origin" :class="isDraft == true ? 'fill-origin-auto' : ''">
+					<text class="fill-origin-title">{{ sourceTxt }} · {{ isDraft == true ? '待补账单' : '只保存你确认的信息' }}</text>
+					<text class="fill-origin-text" v-if="isAuto == true">历史快照识别时间：{{ startedTxt }} → {{ whenTxt }}。请补充账单，状态值可以手动修正。</text>
+					<text class="fill-origin-text" v-else-if="isDraft == true">账单金额尚未填写，可以补录；系统不会推测补能前状态。</text>
+					<text class="fill-origin-text" v-else>没有匹配到历史补能过程，系统不会用当前车辆状态代替补能前状态。</text>
+				</view>
 				<view class="theme-row">
 					<view class="theme-pill" :class="kind == 'charge' ? 'theme-pill-on' : ''" @click="setKind('charge')">
 						<text class="theme-pill-txt" :class="kind == 'charge' ? 'theme-pill-on-txt' : ''">充电</text>
@@ -230,13 +248,13 @@
 				</view>
 
 				<view class="group">
-					<view class="form-line" v-if="whenTxt.length > 0">
-						<text class="form-k">日期时间</text>
-						<text class="form-val">{{ whenTxt }}</text>
-					</view>
-					<view class="hair" v-if="whenTxt.length > 0"></view>
 					<view class="form-line">
-						<text class="form-k">当前总里程</text>
+						<text class="form-k">日期时间</text>
+						<input class="form-in" v-model="eventTime" placeholder="YYYY-MM-DD HH:mm" />
+					</view>
+					<view class="hair"></view>
+					<view class="form-line">
+						<text class="form-k">补能时里程</text>
 						<input class="form-in" v-model="odoEnd" placeholder="可改" />
 						<text class="form-u-wide">公里</text>
 					</view>
@@ -244,14 +262,14 @@
 
 				<view class="group" v-if="kind == 'charge'">
 					<view class="form-line">
-						<text class="form-k">充电金额</text>
-						<input class="form-in" v-model="paid" placeholder="实付，空着为草稿" />
+						<text class="form-k">账单实付</text>
+						<input class="form-in" v-model="paid" placeholder="可后补" />
 						<text class="form-u">元</text>
 					</view>
 					<view class="hair"></view>
 					<view class="form-line">
-						<text class="form-k">充电电量</text>
-						<input class="form-in" v-model="qty" placeholder="枪上度数，可选" />
+						<text class="form-k">账单电量</text>
+						<input class="form-in" v-model="qty" placeholder="枪上度数，可后补" />
 						<text class="form-u">度</text>
 					</view>
 					<view class="hair" v-if="unitTxt.length > 0"></view>
@@ -281,14 +299,14 @@
 
 				<view class="group" v-if="kind == 'refuel'">
 					<view class="form-line">
-						<text class="form-k">实付金额</text>
-						<input class="form-in" v-model="paid" placeholder="实付，空着为草稿" />
+						<text class="form-k">账单实付</text>
+						<input class="form-in" v-model="paid" placeholder="可后补" />
 						<text class="form-u">元</text>
 					</view>
 					<view class="hair"></view>
 					<view class="form-line">
-						<text class="form-k">加油量</text>
-						<input class="form-in" v-model="qty" placeholder="机显升数，可选" />
+						<text class="form-k">账单升数</text>
+						<input class="form-in" v-model="qty" placeholder="机显升数，可后补" />
 						<text class="form-u">升</text>
 					</view>
 					<view class="hair" v-if="unitTxt.length > 0"></view>
@@ -322,7 +340,7 @@
 						<input class="form-in" v-model="note" placeholder="可选" />
 					</view>
 				</view>
-				<button class="primary" :disabled="busy == true" @click="save">保存</button>
+				<button class="primary" :disabled="busy == true" @click="save">{{ isDraft == true ? '保存账单' : '保存记录' }}</button>
 				<button class="ghost" :disabled="busy == true" @click="drop">{{ id == '' ? '取消' : '删除' }}</button>
 				<text class="err" v-if="err.length > 0">{{ err }}</text>
 				<view class="page-end"></view>

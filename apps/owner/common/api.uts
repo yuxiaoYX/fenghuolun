@@ -198,9 +198,9 @@ export function themeOf() : string {
 
 export function themePageBg() : string {
 	if (themeOf() == 'light') {
-		return '#EEF2F6'
+		return '#F0F4F8'
 	}
-	return '#070B10'
+	return '#080D14'
 }
 
 export function pageWrapStyle() : string {
@@ -240,7 +240,7 @@ function pageRoute() : string {
 }
 
 function tabPage(route : string) : boolean {
-	if (route == 'pages/now/now' || route == 'pages/ctrl/ctrl' || route == 'pages/energy/energy' || route == 'pages/battery/battery' || route == 'pages/more/more') {
+	if (route == 'pages/now/now' || route == 'pages/energy/energy' || route == 'pages/more/more') {
 		return true
 	}
 	return false

@@ -1,12 +1,26 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, bounceIfAuthFailed, envelopeOk, envelopeData, dashNum, dashInt, themeClassOf, padBoxStyle, pageWrapStyle, applyThemeChrome } from '../../common/api.uts'
+	import {
+		ownerRequest,
+		sessionOf,
+		bounceIfAuthFailed,
+		envelopeOk,
+		envelopeData,
+		dashNum,
+		dashInt,
+		themeClassOf,
+		padBoxStyle,
+		pageWrapStyle,
+		applyThemeChrome
+	} from '../../common/api.uts'
 
 	type HistRow = {
 		id : string
 		when : string
 		soc : string
 		socVal : number
+		fuel : string
+		fuelVal : number
 		rangeKm : string
 		odo : string
 		stale : boolean
@@ -42,6 +56,9 @@
 		const res = await ownerRequest('GET', '/api/v1/owner/snapshots?page=' + page.value + '&pageSize=20', null)
 		busy.value = false
 		if (envelopeOk(res) == false) {
+			if (reset == false && page.value > 1) {
+				page.value = page.value - 1
+			}
 			if (bounceIfAuthFailed(res) == true) {
 				return
 			}
@@ -65,6 +82,7 @@
 				const row = items[i]
 				const fetched = pick(row, 'fetchedAt')
 				const socNum = pick(row, 'socPct')
+				const fuelNum = pick(row, 'fuelPct')
 				let sVal = 0
 				if (socNum != null) {
 					sVal = Math.round(parseFloat('' + socNum))
@@ -80,6 +98,8 @@
 					when: fetched == null ? '—' : '' + fetched,
 					soc: dashInt(socNum, '%'),
 					socVal: sVal,
+					fuel: dashInt(fuelNum, '%'),
+					fuelVal: fuelNum == null ? 0 : Math.max(0, Math.min(100, Math.round(parseFloat('' + fuelNum)))),
 					rangeKm: dashNum(pick(row, 'evRangeKm'), ' km'),
 					odo: dashNum(pick(row, 'odometerKm'), ' km'),
 					stale: pick(row, 'stale') == true
@@ -149,14 +169,14 @@
 								<text class="snap-clock-icon">🕒</text>
 								<text class="snap-time-txt">{{ row.when }}</text>
 							</view>
-							<view class="tag-badge" :class="row.stale == true ? 'tag-badge-warn' : 'tag-badge-green'">
-								<text class="tag-badge-txt" :class="row.stale == true ? 'tag-badge-warn-txt' : 'tag-badge-green-txt'">
-									{{ row.stale == true ? '数据陈旧' : '上报正常' }}
+							<view class="tag-badge" :class="row.stale ? 'tag-warn' : 'tag-good'">
+								<text class="tag-txt" :class="row.stale ? 'tag-txt-warn' : 'tag-txt-good'">
+									{{ row.stale ? '数据陈旧' : '上报正常' }}
 								</text>
 							</view>
 						</view>
 
-						<!-- 卡片核心数据 3 列格 -->
+						<!-- 卡片核心数据 4 列格 -->
 						<view class="snap-grid">
 							<!-- 电量列 -->
 							<view class="snap-col">
@@ -176,14 +196,23 @@
 								<text class="snap-k">总里程</text>
 								<text class="snap-v">{{ row.odo }}</text>
 							</view>
+							<!-- 油量列 -->
+							<view class="snap-col snap-col-border">
+								<text class="snap-k">剩余油量</text>
+								<text class="snap-v-fuel">{{ row.fuel }}</text>
+								<view class="snap-track">
+									<view class="snap-fill snap-fill-fuel" :style="'width:' + row.fuelVal + '%'">
+									</view>
+								</view>
+							</view>
 						</view>
 					</view>
 				</view>
 
 				<!-- 分页加载 -->
 				<view class="more-wrap" v-if="rows.length < total">
-					<button class="ghost more-btn" :disabled="busy == true" @click="more">
-						{{ busy == true ? '正在加载...' : '加载更多历史快照 (' + rows.length + '/' + total + ')' }}
+					<button class="more-btn" :disabled="busy" @click="more">
+						{{ busy ? '正在加载...' : '加载更多历史快照 (' + rows.length + '/' + total + ')' }}
 					</button>
 				</view>
 
@@ -197,20 +226,32 @@
 	</view>
 </template>
 
-<style>
+<style scoped>
+	.page-wrap {
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+	}
+	.scroller {
+		flex: 1;
+		width: 100%;
+	}
+	.pad {
+		padding: 16px;
+	}
+	.page-end {
+		height: 40px;
+	}
+
 	.stat-banner {
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
-		padding-top: 14px;
-		padding-right: 16px;
-		padding-bottom: 14px;
-		padding-left: 16px;
+		padding: 14px 16px;
 		border-radius: 18px;
-		background-color: var(--fhl-pan);
-		border-width: 1px;
-		border-style: solid;
-		border-color: var(--fhl-line);
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 		margin-bottom: 12px;
 	}
 	.stat-main {
@@ -219,47 +260,40 @@
 	.stat-title {
 		font-size: 17px;
 		font-weight: 700;
-		color: var(--fhl-ink);
+		color: var(--text-main, #0F172A);
 	}
 	.stat-sub {
 		margin-top: 4px;
 		font-size: 11px;
-		color: var(--fhl-mut);
+		color: var(--text-sub, #64748B);
 	}
 	.stat-badge {
 		flex-direction: row;
 		align-items: baseline;
-		padding-top: 4px;
-		padding-right: 12px;
-		padding-bottom: 4px;
-		padding-left: 12px;
+		padding: 4px 12px;
 		border-radius: 12px;
-		background-color: var(--fhl-pan2);
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
 		margin-left: 10px;
 	}
 	.stat-num {
 		font-size: 20px;
 		font-weight: 800;
-		color: var(--fhl-brand);
+		color: #FF5722;
 	}
 	.stat-unit {
 		font-size: 11px;
 		font-weight: 600;
-		color: var(--fhl-mut);
+		color: var(--text-muted, #94A3B8);
 		margin-left: 2px;
 	}
+
 	.empty-card {
-		padding-top: 40px;
-		padding-bottom: 40px;
-		padding-left: 20px;
-		padding-right: 20px;
+		padding: 40px 20px;
 		align-items: center;
 		justify-content: center;
 		border-radius: 18px;
-		background-color: var(--fhl-pan);
-		border-width: 1px;
-		border-style: solid;
-		border-color: var(--fhl-line);
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 	}
 	.empty-icon {
 		font-size: 36px;
@@ -268,38 +302,33 @@
 	.empty-title {
 		font-size: 15px;
 		font-weight: 700;
-		color: var(--fhl-ink);
+		color: var(--text-main, #0F172A);
 	}
 	.empty-sub {
 		margin-top: 6px;
 		font-size: 12px;
-		color: var(--fhl-mut);
+		color: var(--text-muted, #94A3B8);
 		text-align: center;
-		line-height: 1.5em;
+		line-height: 18px;
 	}
+
 	.snap-list {
-		margin-top: 2px;
+		flex-direction: column;
+		gap: 10px;
 	}
 	.snap-card {
-		background-color: var(--fhl-pan);
-		border-width: 1px;
-		border-style: solid;
-		border-color: var(--fhl-line);
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 		border-radius: 18px;
-		padding-top: 12px;
-		padding-right: 14px;
-		padding-bottom: 14px;
-		padding-left: 14px;
-		margin-bottom: 10px;
+		padding: 14px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
 	}
 	.snap-head {
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
 		padding-bottom: 10px;
-		border-bottom-width: 1px;
-		border-bottom-style: solid;
-		border-bottom-color: var(--fhl-line);
+		border-bottom: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
 	}
 	.snap-time-row {
 		flex-direction: row;
@@ -312,8 +341,29 @@
 	.snap-time-txt {
 		font-size: 12px;
 		font-weight: 600;
-		color: var(--fhl-ink2);
+		color: var(--text-main, #0F172A);
 	}
+	.tag-badge {
+		padding: 2px 8px;
+		border-radius: 8px;
+	}
+	.tag-good {
+		background-color: rgba(16, 185, 129, 0.12);
+	}
+	.tag-warn {
+		background-color: rgba(245, 158, 11, 0.12);
+	}
+	.tag-txt {
+		font-size: 10px;
+		font-weight: 600;
+	}
+	.tag-txt-good {
+		color: #059669;
+	}
+	.tag-txt-warn {
+		color: #D97706;
+	}
+
 	.snap-grid {
 		flex-direction: row;
 		align-items: flex-start;
@@ -325,56 +375,64 @@
 	}
 	.snap-col-border {
 		padding-left: 10px;
-		border-left-width: 1px;
-		border-left-style: solid;
-		border-left-color: var(--fhl-line);
+		border-left: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
 	}
 	.snap-k {
 		font-size: 11px;
-		color: var(--fhl-mut);
+		color: var(--text-muted, #94A3B8);
 		margin-bottom: 3px;
 	}
 	.snap-v {
 		font-size: 14px;
 		font-weight: 700;
-		color: var(--fhl-ink);
+		color: var(--text-main, #0F172A);
 	}
 	.snap-v-soc {
 		font-size: 15px;
 		font-weight: 800;
-		color: var(--fhl-ele-text);
+		color: #059669;
+	}
+	.snap-v-fuel {
+		font-size: 15px;
+		font-weight: 800;
+		color: #D97706;
 	}
 	.snap-track {
 		height: 4px;
-		background-color: var(--fhl-line);
+		background-color: rgba(15, 23, 42, 0.08);
 		border-radius: 2px;
 		margin-top: 5px;
 		overflow: hidden;
 	}
 	.snap-fill {
 		height: 4px;
-		background-color: var(--fhl-ele);
+		background-color: #10B981;
 		border-radius: 2px;
 	}
+	.snap-fill-fuel {
+		background-color: #F59E0B;
+	}
+
 	.more-wrap {
-		margin-top: 8px;
+		margin-top: 12px;
 		margin-bottom: 12px;
 	}
 	.more-btn {
-		min-height: 44px;
-		height: 44px;
-		border-radius: 14px;
+		height: 42px;
+		border-radius: 12px;
 		font-size: 13px;
 		font-weight: 600;
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1));
+		color: var(--text-main, #0F172A);
 	}
 	.all-done-wrap {
-		padding-top: 14px;
-		padding-bottom: 8px;
+		padding: 14px 0 8px 0;
 		align-items: center;
 		justify-content: center;
 	}
 	.all-done-txt {
 		font-size: 11px;
-		color: var(--fhl-faint);
+		color: var(--text-muted, #94A3B8);
 	}
 </style>

@@ -1,14 +1,18 @@
 # 哪吒官方协议（证据记录）
 
-本文只记录 **已经用本地 HAR 看到的事实** 和 **明确未验证项**。实现官方客户端时只准依赖「已证实」；把「待验证」做成可运行代码必须先补证据并改本页。
+本文记录 **本地 HAR 已成功的事实**、**探活实锤** 和 **IPA 静态线索**。实现官方客户端时只准把「已证实 / 探活」做成默认路径；IPA 字符串只能当待打清单，补到成功响应后才能上移。
 
-更细的抓包条目见本机 `HAR-ANALYSIS.md`（已 gitignore，不进仓库）。HAR 本身含大量个人数据，**不要打开后把内容贴进仓库。**
+更细条目见本机 `HAR-ANALYSIS.md`（gitignore，含 IPA 反汇编与密钥簇，**不进仓库**）。HAR / IPA 含个人数据与签名密钥，**不要把凭证贴进仓库。**
 
 证据等级：
 
-- **已证实**：请求与响应都在，业务成功
-- **静态线索**：官方 JS 里有调用，无成功响应
-- **未验证**：需要下一轮实车或新抓包
+- **已证实**：HAR 里请求与响应都在，业务成功
+- **探活**：后来用同一网关打通、有业务成功响应，但 1.har 里没有这条
+- **静态线索（H5）**：HAR 下载的官方 JS 有调用，无成功响应
+- **静态线索（IPA）**：`哪吒汽车_6.4.5.ipa` → `CHZ` / `HZNetworking` 中的路径或拦截器逻辑，无成功 HTTP 响应
+- **未验证**：还需要实车或新抓包
+
+冲突：HAR 已证实的方法/字段赢 IPA；IPA 赢「猜的 URL」；产品范围仍以 `02-decisions.md` 为准。
 
 ---
 
@@ -45,7 +49,7 @@ HAR 里仍没有这条请求。用表单探活成功，**不是**从抓包抄来
 
 随后用新 `access_token` 调 `getCurrentVehicle`（JSON `{}`，只带 `Authorization: Bearer`，无 `sign`）同样 `code=20000`。不证明所有接口都可以不签。
 
-登录相关（HAR 业务成功；产品按此调用，**不含 sign**）：
+登录相关（HAR 业务成功）。官方 App 每次带 `sign`；本服务按 IPA 规则计算，密钥走环境变量：
 
 | 项 | 值 |
 |---|---|
@@ -53,10 +57,13 @@ HAR 里仍没有这条请求。用表单探活成功，**不是**从抓包抄来
 | 验证码登录 | `POST /pivot/account/2.0/accountSafe/registerOrLoginUncheck`，JSON `phone, code, pushToken, seriesNo, appVersion, deviceType` |
 | 登录成功 | `data.token.access_token` / `refresh_token` / `token_type` / `expires_in`，另有 `data.customer`、`data.vin`。本服务只取 token |
 | 样本有效期 | `expires_in ≈ 604799`（约七天），当作变量不要写死 |
-| 已发送的静态头 | `appId`、`appVersion=6.4.5`、`channel=iOS`、`login_channel=1` |
-| 未发送 | `sign`、`appKey`、`Cookie`、`nonce`、`timestamp`。算法未知，禁止编造 |
+| 官方 App 头 | `appId`、`appKey`、`timestamp`、`nonce`、`sign`、`appVersion`、`channel`、`login_channel`、`phoneModel` |
+| `sign`（IPA） | `METHOD` + `URL.path` + `appid:…appkey:…nonce:…timestamp:…`（key 小写、无 `&`）+ 表单/query 同样 `k:v` 拼接 + JSON 时再加 `json:`+原文 + `APP_SECRET`。去掉空格/换行后按 `urlQueryAllowed` 减去 `:#[]@?/!$&'()+,;=~` 百分号编码，CryptoSwift SHA-256 小写 hex。query 值保持 URL 原文（不先 decode）。生产 `appId=HOZON-B-xKrgEvMt`。密钥不进仓库 |
+| HAR 向量 | #58 发码已绿。JSON 登录走 `json:` 前缀。缺密钥 → `sign_required` |
 
-HAR **没有** refresh 换票的 HTTP 请求。实锤见上方「换票（探活）」。若发码或登录因缺签名失败，产品返回 `sign_required`，不把失败当成已接通。
+HAR **没有** refresh 换票的 HTTP 请求。实锤见上方「换票（探活）」。发码失败不得宣称登录已通。
+
+IPA 另有一套 HAR 未出现的发码/登录路径（`sendCodeAndTokenCheck`、`registerOrLoginWithPush`），未探活前不要切换。
 
 ---
 
@@ -156,18 +163,37 @@ GB/T 32960.3 是**车 → 国家监测平台的二进制帧协议**；本接口�
 
 ---
 
+## IPA 静态线索（6.4.5，无成功 HTTP）
+
+完整表在本机 `HAR-ANALYSIS.md` §6.1。仓库只留产品可能用到的路径名，**不写密钥**。
+
+| 用途 | 路径 | 说明 |
+|---|---|---|
+| 换票 | `/customer/account/info/refreshApiToken` | 已探活，上移到前文 |
+| 多车 | `/pivot/mds-api/vehicleAccount/1.0/listBindVehicle` | 另有 bind/unbind/授权 |
+| 健康 | `/pivot/after-sale-service-mgr/healthData/1.0/getVehicleHealthRecord` | 与 H5 `getVehicleHealth` **不是同一 path** |
+| 车况补漏 | `/pivot/veh-status/vehicle-status-control/1.0/vehicleDataFind` | HAR 未打 |
+| 车控配置 | `/pivot/vehicle-config-api/1.0/config/getVehicleControlConfigByVin` | 不是命令 |
+| 车控命令 | `/pivot/rvc-api/vehicleControl/1.0/rvcAC` 等、`remoteControl/1.0/rvcAll` | D12 禁止下发 |
+| 模式开关写 | `/pivot/rc-api/modeSwitchItem/1.0/saveModeSwitchItem` | HAR 只有 get |
+| PKI | `/pivot/security-api/pki/cert/1.0/{getTime,updateCert,applyCert}` | HAR 仅 applyCert 400 |
+| 充电记录主机 | `https://charging-api-v2.hozonauto.com` | 不是能耗那条 `api.chehezhi.cn` |
+| 登录变体 | `sendCodeAndTokenCheck` / `registerOrLoginWithPush` | 与 HAR 已证实的 SignCheck 套件并列 |
+
+原生包里没有 `vehicleEnergyConsumption`：能耗两条仍是 H5 + HAR 已证实。
+
 ## 未验证（阻塞或推迟）
 
 | 项 | 说明 |
 |---|---|
-| **sign** | 64 hex，算法未知。换票与一次 `getCurrentVehicle` 探活未带 sign 仍成功，禁止据此编造签名器 |
-| 客户端证书 | `applyCert` 样本 400 `No required SSL certificate was sent`；不代表所有车况接口都要 mTLS，也不代表能从 HAR 推出私钥 |
-| 多车列表 | 只有当前车 |
-| `getVehicleHealth` | 仅 JS 线索 |
-| 车控下发 | 配置有空调/门窗等标识，**零条**命令+回执 |
-| 官方短信登录的 `sign` | 路径和字段已按 HAR 调用；签名仍未验证，缺签名时不得宣称登录已通 |
+| **sign 的 HAR 向量** | #58 发码已绿（`METHOD+PATH` + 小写 `k:v` + percent-encode + SHA-256）。换票/`getCurrentVehicle` 探活未带 sign 仍成功，不证明其它接口可免签。密钥仅运行时注入 |
+| 客户端证书 | `applyCert` 样本 400 `No required SSL certificate was sent`；IPA 还有 getTime/updateCert。不代表所有车况都要 mTLS |
+| 多车列表 | HAR 只有当前车；IPA 路径见上，未探活 |
+| 车辆健康 | H5 `getVehicleHealth` 与原生 `getVehicleHealthRecord` 都无成功响应 |
+| 充电记录 | IPA 主机已知，HAR 未访问 |
+| 车控下发 | URL 已从 IPA 列出，**零条**命令+回执；D12 禁止实现 |
 
-换票一旦实锤，把 host、method、path、content-type、请求字段、响应字段（脱敏）追加到本节「已证实」，并去掉「未验证」对应行。
+把 IPA 路径打出业务成功后，脱敏追加到「已证实」并划掉本表对应行。
 
 ---
 

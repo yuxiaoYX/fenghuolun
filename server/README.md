@@ -12,7 +12,7 @@ go run .
 
 默认 `:8088`（避开 HBuilderX 常用的 8080）。复制 `.env.example` 为 `.env`，填写 `FENGHUOLUN_TOKEN_KEK`。绑定写入 SQLite（默认 `./data/fenghuolun.db`），凭证 AES-GCM。
 
-车主可在前台用手机号和密码注册，并在注册页选择官方短信验证码（`/api/v1/owner/sms/send` 与 `/register`）或直接粘贴 `refresh_token`（同样提交 `/register`）。成功后换票再拉当前车辆、车况、能耗；已注册用户之后只用手机号和密码登录。短信请求不编造 `sign`。没有运行时假数据模式。
+车主可在前台用手机号和密码注册，并在注册页选择官方短信验证码（`/api/v1/owner/sms/send` 与 `/register`）或直接粘贴 `refresh_token`（同样提交 `/register`）。成功后换票再拉当前车辆、车况、能耗；已注册用户之后只用手机号和密码登录。短信请求由服务端按官方 SHA-256 规则计算 `sign`；未配置 `FENGHUOLUN_NETA_APP_SECRET` 时返回 `sign_required`。没有运行时假数据模式。
 
 ```
 GET  /healthz

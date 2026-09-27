@@ -11,7 +11,7 @@
 ## 改文档
 
 - 锁定项变更：必须写 `02-decisions.md` 变更记录
-- 换票等协议实锤：更新 `09-protocol-neta.md`，必要时补本机 `HAR-ANALYSIS.md` 附录（脱敏且不进仓库）
+- 换票等协议实锤：更新 `09-protocol-neta.md`，必要时补本机 `HAR-ANALYSIS.md` 附录（HAR + IPA，脱敏且不进仓库）。IPA 新路径先标静态线索，有成功响应再上移「已证实」
 - 分期完成：勾选 `04-roadmap.md` 的 checkbox
 - 禁止只在聊天里达成新决策
 

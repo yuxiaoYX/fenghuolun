@@ -1,40 +1,68 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, dashNum, dashYuan, timeLine, bounceIfAuthFailed, envelopeOk, envelopeData, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome, fabStyle } from '../../common/api.uts'
+	import FillModal from '../../components/fill-modal/fill-modal.uvue'
+	import {
+		ownerRequest,
+		sessionOf,
+		dashNum,
+		dashYuan,
+		timeLine,
+		bounceIfAuthFailed,
+		envelopeOk,
+		envelopeData,
+		themeClassOf,
+		padBoxStyle,
+		pageWrapStyle,
+		applyThemeChrome,
+		fabStyle
+	} from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
-	const infoIcon = ref(navIcon('info'))
 	const fabBox = ref(fabStyle())
+	const fillModalRef = ref<any>(null)
 
 	const weekKwh = ref('—')
 	const fuelDelta = ref('—')
 	const fuelNote = ref('需要至少两笔快照才能记油')
 	const acShare = ref('—')
 	const note = ref('')
-	const freshText = ref('尚未绑定')
+	const freshText = ref('尚未更新')
 	const elecCost = ref('—')
 	const oilCost = ref('—')
 	const weekCost = ref('官方按日 kWh 合计')
+
 	type EnergyBar = {
 		h : number
+		val : string
+		day : string
 		on : boolean
 	}
+
 	type FillRec = {
 		id : string
 		title : string
 		amt : string
 		oil : boolean
-		mid : string
-		cal : string
+		started : string
+		when : string
+		state : string
+		unit : string
+		action : string
+		draft : boolean
+		icon : string
+		amount : number
+		amountPresent : boolean
+		quantity : number
+		beforeVal : string
+		afterVal : string
+		noteText : string
 	}
+
 	const eleBars = ref<EnergyBar[]>([] as EnergyBar[])
-	const oilBars = ref<EnergyBar[]>([] as EnergyBar[])
-	const fillRecs = ref<FillRec[]>([] as FillRec[])
+	const recentFills = ref<FillRec[]>([] as FillRec[])
 	const hasEleChart = ref(false)
-	const hasOilChart = ref(false)
-	const hasFills = ref(false)
 
 	const pick = (obj, key) => {
 		if (obj == null) {
@@ -43,7 +71,31 @@
 		return obj[key]
 	}
 
-	const toBars = (vals : number[]) : EnergyBar[] => {
+	const displayTime = (raw : string) : string => {
+		if (raw.length >= 16) {
+			return raw.substring(0, 16)
+		}
+		return raw
+	}
+
+	const shortState = (before : string, after : string, isOil : boolean) : string => {
+		const label = isOil ? '油量 ' : '电量 '
+		const start = before == '' ? '—' : before + '%'
+		const end = after == '' ? '—' : after + '%'
+		if (before == '' && after == '') {
+			return '补能前后状态待确认'
+		}
+		return label + start + ' → ' + end
+	}
+
+	const numText = (v) : string => {
+		if (v == null) {
+			return ''
+		}
+		return '' + v
+	}
+
+	const toBars = (vals : number[], labels : string[]) : EnergyBar[] => {
 		const out : EnergyBar[] = []
 		let max = 0
 		let i = 0
@@ -60,15 +112,17 @@
 		i = 0
 		while (i < vals.length) {
 			const n = vals[i]
-			let h = 4
+			let h = 8
 			if (n != null && n > 0) {
-				h = Math.round(n / max * 54)
-				if (h < 4) {
-					h = 4
+				h = Math.round(n / max * 60)
+				if (h < 8) {
+					h = 8
 				}
 			}
 			out.push({
 				h: h,
+				val: n != null ? n.toFixed(1) : '0',
+				day: i < labels.length ? labels[i] : '—',
 				on: i == vals.length - 1
 			})
 			i = i + 1
@@ -78,8 +132,13 @@
 
 	const load = async () => {
 		if (sessionOf() == '') {
-			note.value = '尚未绑定'
-			freshText.value = '尚未绑定'
+			recentFills.value = [] as FillRec[]
+			eleBars.value = [] as EnergyBar[]
+			hasEleChart.value = false
+			weekKwh.value = '—'
+			fuelDelta.value = '—'
+			note.value = '尚未登录'
+			freshText.value = '去「我的」登录以查看能耗'
 			return
 		}
 		const res = await ownerRequest('GET', '/api/v1/owner/energy', null)
@@ -87,28 +146,33 @@
 			if (bounceIfAuthFailed(res) == true) {
 				return
 			}
-			note.value = '拉能耗失败'
+			note.value = '拉取能耗数据失败'
 			return
 		}
 		const data = envelopeData(res)
 		note.value = pick(data, 'note') != null ? '' + pick(data, 'note') : ''
+
 		const spend = pick(data, 'spend')
 		elecCost.value = dashYuan(pick(spend, 'chargePaidCny'))
 		oilCost.value = dashYuan(pick(spend, 'refuelPaidCny'))
 		const useCost = pick(spend, 'elecUseCostCny')
 		if (useCost != null) {
-			weekCost.value = dashYuan(useCost) + ' · 按你填的充电折合'
+			weekCost.value = dashYuan(useCost) + ' · 按实填电费折合'
 		} else {
 			weekCost.value = '官方按日 kWh 合计'
 		}
+
 		const official = pick(data, 'official')
 		freshText.value = timeLine(pick(official, 'fetchedAt'), null)
 		weekKwh.value = dashNum(pick(official, 'totalKwh'), '')
+
 		const days = pick(official, 'days')
 		const eleVals : number[] = []
+		const eleLabels : string[] = []
 		if (days != null && days.length > 0) {
-			const total0 = pick(days[0], 'totalKwh')
-			const ac = pick(days[0], 'acKwh')
+			const latest = days[days.length - 1]
+			const total0 = pick(latest, 'totalKwh')
+			const ac = pick(latest, 'acKwh')
 			if (total0 != null && ac != null && total0 > 0) {
 				acShare.value = '' + Math.round(ac / total0 * 100) + '%'
 			}
@@ -124,17 +188,19 @@
 				} else {
 					eleVals.push(parseFloat('' + kwh))
 				}
+				const countTime = pick(days[i], 'countTime')
+				eleLabels.push(countTime == null ? '—' : ('' + countTime).substring(5, 10))
 				i = i + 1
 			}
 		}
 		if (eleVals.length > 0) {
-			eleBars.value = toBars(eleVals)
+			eleBars.value = toBars(eleVals, eleLabels)
 			hasEleChart.value = true
 		} else {
 			hasEleChart.value = false
 		}
+
 		const fuel = pick(data, 'fuel')
-		const oilVals : number[] = []
 		if (fuel != null && fuel.length > 0) {
 			const last = fuel[fuel.length - 1]
 			const kind = pick(last, 'kind')
@@ -145,84 +211,103 @@
 			} else if (kind == 'refuel') {
 				fuelNote.value = '加油，不计入耗油'
 			} else {
-				fuelNote.value = '油量持平或未知'
-			}
-			let start = 0
-			if (fuel.length > 7) {
-				start = fuel.length - 7
-			}
-			let i = start
-			while (i < fuel.length) {
-				const dlt = pick(fuel[i], 'fuelPctDelta')
-				let abs = 0
-				if (dlt != null) {
-					abs = dlt
-					if (abs < 0) {
-						abs = -abs
-					}
-				}
-				oilVals.push(abs)
-				i = i + 1
+				fuelNote.value = '油量持平或待对照'
 			}
 		}
+
 		const fills = pick(data, 'fills')
 		const recs : FillRec[] = []
 		if (fills != null) {
 			let fi = 0
-			while (fi < fills.length && fi < 20) {
+			while (fi < fills.length) {
 				const row = fills[fi]
 				const k = pick(row, 'kind')
-				const title = k == 'refuel' ? '加油' : '充电'
-				let amt = dashYuan(pick(row, 'paidCny'))
-				if (pick(row, 'paidCny') == null) {
-					amt = '待补花费'
+				const oil = k == 'refuel'
+				const draft = pick(row, 'status') == 'draft'
+				const auto = pick(row, 'source') == 'auto'
+				const amountPresent = pick(row, 'paidCny') != null
+				const amountValue = amountPresent ? parseFloat('' + pick(row, 'paidCny')) : 0
+				const quantityValue = oil ? (pick(row, 'liters') == null ? 0 : parseFloat('' + pick(row, 'liters'))) : (pick(row, 'energyKwh') == null ? 0 : parseFloat('' + pick(row, 'energyKwh')))
+				let amt = pick(row, 'paidCny') != null ? '¥' + amountValue.toFixed(2) : '待补金额'
+				let title = oil ? '加油记账' : '充电记账'
+				if (draft && auto) {
+					title = oil ? '系统识别 · 加油' : '系统识别 · 充电'
+				} else if (pick(row, 'note') != null && ('' + pick(row, 'note')).trim() != '') {
+					title = '' + pick(row, 'note')
 				}
 				const unit = pick(row, 'unitCny')
-				let cal = '电量 ' + dashNum(pick(row, 'socStart'), '%') + ' → ' + dashNum(pick(row, 'socEnd'), '%')
-				if (k == 'refuel') {
-					cal = '油量 ' + dashNum(pick(row, 'fuelStart'), '%') + ' → ' + dashNum(pick(row, 'fuelEnd'), '%')
+				const beforeText = oil ? numText(pick(row, 'fuelStart')) : numText(pick(row, 'socStart'))
+				const afterText = oil ? numText(pick(row, 'fuelEnd')) : numText(pick(row, 'socEnd'))
+				let state = shortState(beforeText, afterText, oil)
+				if (quantityValue > 0) {
+					state = state + (oil ? ' (加入 ' : ' (充入 ') + quantityValue.toFixed(1) + (oil ? ' L)' : ' kWh)')
 				}
-				if (unit != null) {
-					cal = cal + ' · ' + dashYuan(unit) + (k == 'refuel' ? '/L' : '/kWh')
-				}
+				const unitText = unit == null ? '' : '折合 ¥' + parseFloat('' + unit).toFixed(2) + (oil ? '/升' : '/度')
 				recs.push({
 					id: '' + pick(row, 'id'),
 					title: title,
 					amt: amt,
-					oil: k == 'refuel',
-					mid: '' + pick(row, 'finishedAt'),
-					cal: cal
+					oil: oil,
+					started: pick(row, 'startedAt') == null ? '' : displayTime('' + pick(row, 'startedAt')),
+					when: pick(row, 'finishedAt') == null ? '' : displayTime('' + pick(row, 'finishedAt')),
+					state: state,
+					unit: unitText,
+					action: draft ? '补充账单 ›' : '已入账 ›',
+					draft: draft,
+					icon: oil ? '⛽' : '⚡',
+					amount: amountValue,
+					amountPresent: amountPresent,
+					quantity: quantityValue,
+					beforeVal: beforeText,
+					afterVal: afterText,
+					noteText: pick(row, 'note') == null ? '' : '' + pick(row, 'note')
 				})
 				fi = fi + 1
 			}
 		}
-		if (oilVals.length > 0) {
-			oilBars.value = toBars(oilVals)
-			hasOilChart.value = true
-		} else {
-			hasOilChart.value = false
+
+		recentFills.value = [] as FillRec[]
+		let recent = 0
+		while (recent < recs.length && recent < 3) {
+			recentFills.value.push(recs[recent])
+			recent = recent + 1
 		}
-		fillRecs.value = recs
-		hasFills.value = recs.length > 0
+	}
+
+	// 跳转全部补能记录独立二级页面
+	const goAllFills = () => {
+		uni.navigateTo({ url: '/pages/fills/all' })
+	}
+
+	// 点击右下角 FAB 悬浮球：调用弹窗组件，直接默认弹出充电记账 Modal！
+	const tapFab = () => {
+		if (fillModalRef.value != null) {
+			fillModalRef.value.open('charge', false, null)
+		}
+	}
+
+	// 点击列表记录：调用弹窗组件回填数据
+	const clickFillRec = (rec : FillRec) => {
+		if (fillModalRef.value != null) {
+			const payload : UTSJSONObject = {
+				id: rec.id,
+				amount: rec.amount,
+				amountPresent: rec.amountPresent,
+				quantity: rec.quantity,
+				beforeVal: rec.beforeVal,
+				afterVal: rec.afterVal,
+				noteText: rec.noteText,
+				timeTxt: rec.when
+			}
+			fillModalRef.value.open(rec.oil ? 'refuel' : 'charge', rec.draft, payload)
+		}
 	}
 
 	const tapHow = () => {
 		uni.showModal({
-			title: '电和油为什么拆开',
-			content: '官方能耗接口只有 kWh。油耗用连续快照的油量差分。花费只计充电和加油的实付。自动充电草稿要有插枪或充电状态；枚举未对照时请点＋手补。',
+			title: '电耗与油耗计算规则',
+			content: '电耗：来自官方每日统计 kWh；\n油耗：私有服务根据快照油量差分计算；\n花费：以您每次充电或加油实付记账为准。',
 			showCancel: false
-		})
-	}
-
-	const goFill = (fid : string) => {
-		uni.navigateTo({
-			url: '/pages/fill/fill?id=' + fid
-		})
-	}
-
-	const goAdd = () => {
-		uni.navigateTo({
-			url: '/pages/fill/fill?kind=charge'
 		})
 	}
 
@@ -230,7 +315,6 @@
 		themeClass.value = themeClassOf()
 		padStyle.value = padBoxStyle(true)
 		wrapStyle.value = pageWrapStyle()
-		infoIcon.value = navIcon('info')
 		fabBox.value = fabStyle()
 		applyThemeChrome()
 	}
@@ -249,113 +333,437 @@
 	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
 		<scroll-view class="scroller" direction="vertical">
 			<view class="pad" :style="padStyle">
-				<view class="head">
-					<view class="head-main">
-						<text class="meta">电、油分开记 · 花费按次实付</text>
+
+				<!-- 头部抬头与规则说明 -->
+				<view class="energy-header">
+					<view class="head-left">
+						<text class="page-title">能耗与用车账本</text>
+						<text class="page-subtitle">电、油双账分开记 · 花费按次实付</text>
 					</view>
-					<view class="icon-btn" @click="tapHow">
-						<image class="icon-img" :src="infoIcon" mode="aspectFit"></image>
+					<view class="info-btn" @click="tapHow">
+						<text class="info-icon">ℹ️</text>
 					</view>
 				</view>
 
-				<view class="fresh">
-					<text class="fresh-txt">{{ freshText }}</text>
-				</view>
+				<!-- ⚡【近 7 日用车资产总览大卡】 -->
+				<view class="cockpit-card">
+					<view class="card-head">
+						<text class="card-title">近 7 日用车资产总览</text>
+						<text class="card-extra elec-color">暂无里程数据，无法计算</text>
+					</view>
 
-				<view class="pair">
-					<view class="tile">
-						<view class="tile-accent"></view>
-						<text class="k">官方用电</text>
-						<view class="big-row">
-							<text class="tile-v">{{ weekKwh }}</text>
-							<text class="unit"> kWh</text>
+					<view class="asset-grid">
+						<view class="asset-tile asset-tile-elec">
+							<text class="asset-label">官方总用电</text>
+							<view class="asset-num-row">
+								<text class="asset-num">{{ weekKwh }}</text>
+								<text class="asset-unit">kWh</text>
+							</view>
+							<text class="asset-sub elec-color">{{ weekCost }}</text>
 						</view>
-						<text class="tile-p">{{ weekCost }}</text>
-					</view>
-					<view class="tile-gap"></view>
-					<view class="tile">
-						<view class="tile-accent tile-accent-oil"></view>
-						<text class="k">账本用油</text>
-						<view class="big-row">
-							<text class="tile-v tile-v-oil">{{ fuelDelta }}</text>
-						</view>
-						<text class="tile-p">{{ fuelNote }}</text>
-					</view>
-				</view>
 
-				<view class="tile" style="margin-bottom: 10px;">
-					<view class="tile-accent"></view>
-					<text class="k">电里空调占比 · 最近一日</text>
-					<view class="big-row">
-						<text class="tile-v">{{ acShare }}</text>
-					</view>
-					<text class="tile-p">{{ note }}</text>
-				</view>
-
-				<view class="chart" v-if="hasEleChart == true">
-					<text class="k">近 7 日用电 kWh（官方表）</text>
-					<view class="bars">
-						<view class="bar-wrap" v-for="(b, i) in eleBars" :key="i">
-							<view class="bar" :class="b.on == true ? 'bar-on' : ''" :style="'height:' + b.h + 'px'"></view>
+						<view class="asset-tile asset-tile-oil">
+							<text class="asset-label">账本净耗油</text>
+							<view class="asset-num-row">
+								<text class="asset-num oil-color">{{ fuelDelta }}</text>
+								<text class="asset-unit">油量</text>
+							</view>
+							<text class="asset-sub oil-color">{{ fuelNote }}</text>
 						</view>
-					</view>
-					<view class="cap">
-						<text class="cap-txt">较早</text>
-						<text class="cap-txt">最近</text>
-					</view>
-				</view>
-				<view class="chart" v-if="hasOilChart == true">
-					<text class="k">近 7 段油量变化（百分点）</text>
-					<view class="bars">
-						<view class="bar-wrap" v-for="(b, i) in oilBars" :key="i">
-							<view class="bar bar-oil" :class="b.on == true ? 'bar-oil-on' : ''" :style="'height:' + b.h + 'px'"></view>
-						</view>
-					</view>
-					<view class="cap">
-						<text class="cap-txt">加油另见下方</text>
-						<text class="cap-txt">空段为 0</text>
 					</view>
 				</view>
 
-				<text class="sec-title">充电 / 加油花费</text>
-				<view class="pair" style="margin-bottom: 10px;">
-					<view class="tile">
-						<view class="tile-accent"></view>
-						<text class="k">充电实付</text>
-						<view class="big-row">
-							<text class="tile-v">{{ elecCost }}</text>
-						</view>
-						<text class="tile-p">不是电网账单</text>
+				<!-- 📊【近 7 日用电趋势直方图】 -->
+				<view class="cockpit-card" v-if="hasEleChart">
+					<view class="card-head">
+						<text class="card-title">近 7 日用电趋势 (kWh)</text>
+						<text class="card-extra">官方按日统计</text>
 					</view>
-					<view class="tile-gap"></view>
-					<view class="tile">
-						<view class="tile-accent tile-accent-oil"></view>
-						<text class="k">加油实付</text>
-						<view class="big-row">
-							<text class="tile-v tile-v-oil">{{ oilCost }}</text>
+
+					<view class="chart-box">
+						<view class="bar-col" v-for="(b, idx) in eleBars" :key="idx">
+							<text class="bar-val" :class="b.on ? 'elec-color font-bold' : ''">{{ b.val }}</text>
+							<view class="bar-slot">
+								<view class="bar-fill" :class="b.on ? 'bar-on' : 'bar-off'" :style="'height:' + b.h + 'px'"></view>
+							</view>
+							<text class="bar-day" :class="b.on ? 'elec-color font-bold' : ''">{{ b.day }}</text>
 						</view>
-						<text class="tile-p">不是油站小票</text>
 					</view>
 				</view>
-				<view v-if="hasFills == true">
-					<view class="rec" v-for="rec in fillRecs" :key="rec.id" @click="goFill(rec.id)">
-						<view class="rec-top">
-							<text class="rec-title">{{ rec.title }}</text>
-							<text class="rec-amt" :class="rec.oil == true ? 'rec-amt-oil' : ''">{{ rec.amt }}</text>
+
+				<!-- 📝【最近补能记录】 (跳转独立全部记录页面) -->
+				<view class="section-card">
+					<view class="section-head">
+						<text class="section-title">最近补能记录</text>
+						<!-- 查看全部记录 (跳转独立页面) -->
+						<view class="link-all-btn" @click="goAllFills">
+							<text class="link-all-text">查看全部记录 ›</text>
 						</view>
-						<text class="rec-mid">{{ rec.mid }}</text>
-						<text class="rec-cal">{{ rec.cal }}</text>
+					</view>
+
+					<!-- 流水卡片列表 -->
+					<view class="fills-list">
+						<view class="fill-card" v-for="rec in recentFills" :key="rec.id" @click="clickFillRec(rec)">
+							<view class="fill-row-top">
+								<view class="fill-title-wrap">
+									<view class="fill-icon-box" :class="rec.oil ? 'icon-oil' : 'icon-elec'">
+										<text class="fill-emoji">{{ rec.icon }}</text>
+									</view>
+									<text class="fill-title">{{ rec.title }}</text>
+									<text class="draft-badge" v-if="rec.draft">待补账单</text>
+								</view>
+								<text class="fill-amt" :class="rec.draft ? 'amt-draft' : 'amt-paid'">{{ rec.amt }}</text>
+							</view>
+
+							<view class="fill-row-mid">
+								<text class="fill-state">{{ rec.state }}</text>
+								<text class="fill-unit-txt" v-if="rec.unit.length > 0">{{ rec.unit }}</text>
+							</view>
+
+							<view class="fill-row-bot">
+								<text class="fill-time">{{ rec.when }}</text>
+								<text class="fill-action">{{ rec.action }}</text>
+							</view>
+						</view>
+
+						<view class="empty-tip" v-if="recentFills.length == 0">
+							<text class="empty-txt">暂无补能记录，点击右下角 ＋ 补记一笔</text>
+						</view>
 					</view>
 				</view>
-				<view class="void" v-if="hasFills == false">
-					<text class="void-t">还没有充电或加油记录</text>
-					<text class="note">点右下角 ＋ 手补。加油可从油量上升自动出草稿。充电自动草稿要有插枪/充电状态。</text>
-				</view>
-				<view class="page-end" style="height:80px"></view>
+
+				<view class="page-end"></view>
 			</view>
 		</scroll-view>
-		<view class="fab" :style="fabBox" @click="goAdd">
-			<text class="fab-txt">＋</text>
+
+		<!-- 🔘 右下角常驻悬浮按钮 (FAB) - 点击直接调用弹窗组件，默认弹出充电记账 -->
+		<view class="fab-btn" :style="fabBox" @click="tapFab">
+			<text class="fab-plus">＋</text>
 		</view>
+
+		<!-- 独立补能记账弹窗组件 -->
+		<FillModal ref="fillModalRef" @success="load" />
 	</view>
 </template>
+
+<style scoped>
+	.page-wrap {
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+		position: relative;
+	}
+	.scroller {
+		flex: 1;
+		width: 100%;
+	}
+	.pad {
+		padding: 16px;
+	}
+	.page-end {
+		height: 80px;
+	}
+
+	.energy-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 14px;
+	}
+	.head-left {
+		flex-direction: column;
+	}
+	.page-title {
+		font-size: 20px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.page-subtitle {
+		font-size: 12px;
+		color: var(--text-sub, #64748B);
+		margin-top: 2px;
+	}
+	.info-btn {
+		width: 36px;
+		height: 36px;
+		border-radius: 18px;
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		justify-content: center;
+		align-items: center;
+	}
+	.info-icon {
+		font-size: 16px;
+	}
+
+	/* 通用座舱卡片 */
+	.cockpit-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 18px;
+		padding: 14px;
+		margin-bottom: 14px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+	}
+	.card-head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	.card-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+		letter-spacing: 0.5px;
+	}
+	.card-extra {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	/* 资产两列 */
+	.asset-grid {
+		flex-direction: row;
+		gap: 12px;
+	}
+	.asset-tile {
+		flex: 1;
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border-radius: 14px;
+		padding: 12px;
+		border-left: 3px solid transparent;
+	}
+	.asset-tile-elec {
+		border-left-color: #10B981;
+	}
+	.asset-tile-oil {
+		border-left-color: #F59E0B;
+	}
+	.asset-label {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.asset-num-row {
+		flex-direction: row;
+		align-items: baseline;
+		margin: 4px 0;
+	}
+	.asset-num {
+		font-size: 22px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.asset-unit {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin-left: 3px;
+	}
+	.asset-sub {
+		font-size: 11px;
+		font-weight: 500;
+	}
+
+	.elec-color {
+		color: #059669;
+	}
+	.oil-color {
+		color: #D97706;
+	}
+	.font-bold {
+		font-weight: 700;
+	}
+
+	/* 7日柱状图 */
+	.chart-box {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-end;
+		height: 110px;
+		padding-top: 10px;
+	}
+	.bar-col {
+		flex: 1;
+		align-items: center;
+		justify-content: flex-end;
+	}
+	.bar-val {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+		margin-bottom: 4px;
+	}
+	.bar-slot {
+		height: 60px;
+		justify-content: flex-end;
+		width: 100%;
+		align-items: center;
+	}
+	.bar-fill {
+		width: 20px;
+		border-top-left-radius: 6px;
+		border-top-right-radius: 6px;
+	}
+	.bar-off {
+		background-color: var(--border-color, rgba(15, 23, 42, 0.12));
+	}
+	.bar-on {
+		background-color: #10B981;
+		box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+	}
+	.bar-day {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin-top: 6px;
+	}
+
+	/* 最近记录专区 */
+	.section-card {
+		margin-top: 4px;
+	}
+	.section-head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 10px;
+		padding: 0 2px;
+	}
+	.section-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+		letter-spacing: 0.5px;
+	}
+	.link-all-btn {
+		padding: 4px 6px;
+	}
+	.link-all-text {
+		font-size: 12px;
+		font-weight: 700;
+		color: #FF5722;
+	}
+
+	/* 补能卡片 */
+	.fills-list {
+		flex-direction: column;
+		gap: 10px;
+	}
+	.fill-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 16px;
+		padding: 12px 14px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+	}
+	.fill-row-top {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 6px;
+	}
+	.fill-title-wrap {
+		flex-direction: row;
+		align-items: center;
+	}
+	.fill-icon-box {
+		width: 24px;
+		height: 24px;
+		border-radius: 8px;
+		justify-content: center;
+		align-items: center;
+		margin-right: 8px;
+	}
+	.icon-elec {
+		background-color: rgba(16, 185, 129, 0.12);
+	}
+	.icon-oil {
+		background-color: rgba(245, 158, 11, 0.12);
+	}
+	.fill-emoji {
+		font-size: 12px;
+	}
+	.fill-title {
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.draft-badge {
+		font-size: 10px;
+		color: #FF5722;
+		background-color: rgba(255, 87, 34, 0.1);
+		padding: 2px 6px;
+		border-radius: 6px;
+		margin-left: 8px;
+	}
+	.fill-amt {
+		font-size: 14px;
+		font-weight: 700;
+	}
+	.amt-draft {
+		color: #FF5722;
+	}
+	.amt-paid {
+		color: var(--text-main, #0F172A);
+	}
+
+	.fill-row-mid {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 6px;
+	}
+	.fill-state {
+		font-size: 12px;
+		color: var(--text-sub, #64748B);
+	}
+	.fill-unit-txt {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	.fill-row-bot {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 6px;
+		border-top: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
+	}
+	.fill-time {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.fill-action {
+		font-size: 11px;
+		font-weight: 600;
+		color: #FF5722;
+	}
+
+	.empty-tip {
+		align-items: center;
+		padding: 30px 0;
+	}
+	.empty-txt {
+		font-size: 12px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	/* FAB 悬浮球 */
+	.fab-btn {
+		position: fixed;
+		right: 20px;
+		bottom: 80px;
+		width: 52px;
+		height: 52px;
+		border-radius: 26px;
+		background: linear-gradient(135deg, #FF7043 0%, #FF5722 100%);
+		justify-content: center;
+		align-items: center;
+		box-shadow: 0 4px 16px rgba(255, 87, 34, 0.35);
+		z-index: 99;
+	}
+	.fab-plus {
+		font-size: 26px;
+		font-weight: 400;
+		color: #FFFFFF;
+		margin-top: -2px;
+	}
+</style>

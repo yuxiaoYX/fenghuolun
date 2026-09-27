@@ -1,0 +1,533 @@
+<script setup>
+	import { ref } from 'vue'
+	import {
+		ownerRequest,
+		sessionOf,
+		bounceIfAuthFailed,
+		envelopeOk
+	} from '../../common/api.uts'
+
+	const emit = defineEmits(['close', 'success'])
+
+	// 弹窗可见性与状态
+	const isOpen = ref(false)
+	const fillBusy = ref(false)
+	const fillError = ref('')
+	const fillID = ref('')
+	const fillKind = ref('charge') // 默认充电
+	const isDraftMode = ref(false)
+
+	// 表单字段
+	const fillPaid = ref('')
+	const fillQty = ref('')
+	const fillAfter = ref('')
+	const fillBefore = ref('')
+	const fillTime = ref('')
+	const fillNote = ref('')
+	const fillUnit = ref('')
+
+	// 快照状态识别卡
+	const snapshotTitle = ref('手工记录')
+	const snapshotTimeTxt = ref('后台定时采样')
+	const snapshotLabel = ref('补能状态 (可选)')
+	const snapshotValue = ref('未填写')
+	const snapshotNote = ref('没有匹配到历史补能过程，可直接手工补充花费')
+	const showBeforeInput = ref(false)
+	const deltaText = ref('补能前后状态可选填')
+
+	const pad2 = (n : number) : string => {
+		if (n < 10) {
+			return '0' + n.toString()
+		}
+		return n.toString()
+	}
+
+	const localDateTime = () : string => {
+		const date = new Date()
+		return date.getFullYear().toString() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' + pad2(date.getHours()) + ':' + pad2(date.getMinutes())
+	}
+
+	const parsedNumber = (raw : string) : number | null => {
+		if (raw.trim() == '') {
+			return null
+		}
+		const n = parseFloat(raw)
+		if (n != n) {
+			return null
+		}
+		return n
+	}
+
+	// 实时动态计算折合单价
+	const updateUnit = () => {
+		const paid = parsedNumber(fillPaid.value)
+		const qty = parsedNumber(fillQty.value)
+		if (paid != null && qty != null && qty > 0) {
+			const uName = fillKind.value == 'refuel' ? '元/L' : '元/kWh'
+			fillUnit.value = '¥' + (paid / qty).toFixed(2) + ' ' + uName
+		} else {
+			fillUnit.value = '输入金额和补能量后计算'
+		}
+	}
+
+	const updateDelta = () => {
+		const b = fillBefore.value.trim()
+		const a = fillAfter.value.trim()
+		const label = fillKind.value == 'refuel' ? '油量 ' : '电量 '
+		if (b != '' && a != '') {
+			deltaText.value = '补能前 ' + b + '% → 结束后 ' + a + '%'
+		} else if (b != '') {
+			deltaText.value = '补能前 ' + b + '% → 结束后待填写'
+		} else if (a != '') {
+			deltaText.value = '结束' + label + a + '%'
+		} else {
+			deltaText.value = '补能前后状态可选填'
+		}
+		updateUnit()
+	}
+
+	// 双段分段器切换
+	const setFillKind = (kind : string) => {
+		fillKind.value = kind
+		if (isDraftMode.value == false) {
+			snapshotLabel.value = '补能状态 (可选)'
+			snapshotValue.value = '未填写'
+			snapshotNote.value = '没有匹配到历史补能过程，可直接手工补充花费'
+		}
+		updateDelta()
+	}
+
+	const toggleBeforeWrap = () => {
+		showBeforeInput.value = !showBeforeInput.value
+	}
+
+	// 外部调用 open 方法
+	const open = (kind : string = 'charge', draft : boolean = false, item : UTSJSONObject | null = null) => {
+		fillKind.value = kind
+		isDraftMode.value = draft
+		fillError.value = ''
+		showBeforeInput.value = false
+
+		if (item != null) {
+			const idVal = item['id']
+			fillID.value = idVal != null ? '' + idVal : ''
+			const amt = item['amount']
+			const amountPresent = item['amountPresent'] == true
+			fillPaid.value = amountPresent && amt != null ? '' + amt : ''
+			const qty = item['quantity']
+			fillQty.value = qty != null && parseFloat('' + qty) > 0 ? '' + qty : ''
+			const bVal = item['beforeVal']
+			fillBefore.value = bVal != null ? '' + bVal : ''
+			const aVal = item['afterVal']
+			fillAfter.value = aVal != null ? '' + aVal : ''
+			const nVal = item['noteText']
+			fillNote.value = nVal != null ? '' + nVal : ''
+			const tVal = item['timeTxt']
+			fillTime.value = tVal != null && ('' + tVal).trim() != '' ? '' + tVal : localDateTime()
+
+			snapshotTitle.value = draft ? '历史快照识别结果' : '账单记录'
+			snapshotTimeTxt.value = '记录于 ' + fillTime.value
+			snapshotLabel.value = '识别补能状态'
+			snapshotValue.value = fillBefore.value != '' ? fillBefore.value + ' → ' + fillAfter.value + '%' : '未填写'
+			snapshotNote.value = draft ? '由后台历史快照识别，账单可事后补录；状态可手动修正' : '已入账记录，可随时修改备注与实付'
+		} else {
+			fillID.value = ''
+			fillPaid.value = ''
+			fillQty.value = ''
+			fillBefore.value = ''
+			fillAfter.value = ''
+			fillNote.value = ''
+			fillTime.value = localDateTime()
+			snapshotTitle.value = '手工记录'
+			snapshotTimeTxt.value = '当前手工录入'
+			snapshotLabel.value = '补能状态 (可选)'
+			snapshotValue.value = '未填写'
+			snapshotNote.value = '没有匹配到历史补能过程，系统不会用当前车辆状态代替补能前状态'
+		}
+
+		updateDelta()
+		isOpen.value = true
+	}
+
+	const close = () => {
+		isOpen.value = false
+		emit('close')
+	}
+
+	const saveFill = async () => {
+		fillError.value = ''
+		if (fillBusy.value == true) {
+			return
+		}
+		const paid = parsedNumber(fillPaid.value)
+		const qty = parsedNumber(fillQty.value)
+		if (fillPaid.value.trim() != '' && paid == null) {
+			fillError.value = '实付金额请填写数字'
+			return
+		}
+		if (fillQty.value.trim() != '' && qty == null) {
+			fillError.value = fillKind.value == 'refuel' ? '加油升数请填写数字' : '充入电量请填写数字'
+			return
+		}
+		const body : UTSJSONObject = {
+			kind: fillKind.value,
+			paidCny: paid,
+			finishedAt: fillTime.value.trim(),
+			note: fillNote.value
+		}
+		if (fillKind.value == 'refuel') {
+			body['liters'] = qty
+			body['fuelStart'] = parsedNumber(fillBefore.value)
+			body['fuelEnd'] = parsedNumber(fillAfter.value)
+		} else {
+			body['energyKwh'] = qty
+			body['socStart'] = parsedNumber(fillBefore.value)
+			body['socEnd'] = parsedNumber(fillAfter.value)
+		}
+		fillBusy.value = true
+		const res = fillID.value == ''
+			? await ownerRequest('POST', '/api/v1/owner/fills', body)
+			: await ownerRequest('PUT', '/api/v1/owner/fills/' + fillID.value, body)
+		fillBusy.value = false
+		if (envelopeOk(res) == true) {
+			isOpen.value = false
+			uni.showToast({ title: '保存成功', icon: 'none' })
+			emit('success')
+			return
+		}
+		if (bounceIfAuthFailed(res) == true) {
+			close()
+			return
+		}
+		fillError.value = '保存失败，请检查金额和数值'
+	}
+
+	defineExpose({
+		open,
+		close
+	})
+</script>
+
+<template>
+	<view class="modal-mask" v-if="isOpen" @click="close">
+		<view class="modal-card" @click.stop="">
+			<!-- 模态顶部 -->
+			<view class="modal-header">
+				<text class="modal-title">{{ fillID.length > 0 ? '补充 / 修改账单' : (fillKind == 'refuel' ? '补能记账 · 加油' : '补能记账 · 充电') }}</text>
+				<view class="close-btn" @click="close">
+					<text class="close-txt">✕</text>
+				</view>
+			</view>
+
+			<!-- ⚡ 顶部分段器：充电记账 / 加油记账 快速切换 -->
+			<view class="kind-seg-box">
+				<view class="kind-seg-btn" :class="fillKind == 'charge' ? 'kind-seg-charge' : ''" @click="setFillKind('charge')">
+					<text class="kind-seg-txt" :class="fillKind == 'charge' ? 'kind-txt-charge' : ''">⚡ 充电记账</text>
+				</view>
+				<view class="kind-seg-btn" :class="fillKind == 'refuel' ? 'kind-seg-oil' : ''" @click="setFillKind('refuel')">
+					<text class="kind-seg-txt" :class="fillKind == 'refuel' ? 'kind-txt-oil' : ''">⛽ 加油记账</text>
+				</view>
+			</view>
+
+			<text class="error-msg" v-if="fillError.length > 0">{{ fillError }}</text>
+
+			<!-- 历史快照识别结果小卡片 -->
+			<view class="snapshot-card">
+				<view class="snap-top-line">
+					<text class="snap-top-title">{{ snapshotTitle }}</text>
+					<text class="snap-top-time">{{ snapshotTimeTxt }}</text>
+				</view>
+				<view class="snap-mid-line">
+					<text class="snap-mid-lbl">{{ snapshotLabel }}</text>
+					<text class="snap-mid-val">{{ snapshotValue }}</text>
+				</view>
+				<text class="snap-bot-desc">{{ snapshotNote }}</text>
+			</view>
+
+			<!-- 账单实付大输入框 -->
+			<view class="form-block">
+				<text class="field-label">账单实付 (元，可后补)</text>
+				<input class="input-paid" type="digit" v-model="fillPaid" @input="updateUnit" placeholder="请输入实际支付金额，如 45.20" />
+			</view>
+
+			<!-- 两列并排：充入量 + 结束电量/油量 -->
+			<view class="form-row-2">
+				<view class="form-col">
+					<text class="field-label">{{ fillKind == 'refuel' ? '加油升数 (L)' : '充入度数 (kWh)' }}</text>
+					<input class="input-compact" type="digit" v-model="fillQty" @input="updateUnit" :placeholder="fillKind == 'refuel' ? '如 34.2' : '如 32.5'" />
+				</view>
+				<view class="form-col">
+					<text class="field-label">{{ fillKind == 'refuel' ? '结束油量' : '结束电量 (SOC)' }}</text>
+					<view class="input-unit-wrap">
+						<input class="input-compact input-with-unit" type="digit" v-model="fillAfter" @input="updateDelta" :placeholder="fillKind == 'refuel' ? '100' : '95'" />
+						<text class="input-unit-sym">%</text>
+					</view>
+				</view>
+			</view>
+
+			<!-- 补能前状态微调行 -->
+			<view class="delta-row">
+				<text class="delta-text">{{ deltaText }}</text>
+				<view class="edit-before-btn" @click="toggleBeforeWrap">
+					<text class="edit-before-txt">{{ showBeforeInput ? '收起修改' : '修改补能前状态' }}</text>
+				</view>
+			</view>
+
+			<!-- 折叠展开的补能前状态输入 -->
+			<view class="before-wrap" v-if="showBeforeInput">
+				<text class="field-label">{{ fillKind == 'refuel' ? '补能前油量' : '补能前电量 (SOC)' }}</text>
+				<view class="input-unit-wrap">
+					<input class="input-compact input-with-unit" type="digit" v-model="fillBefore" @input="updateDelta" :placeholder="fillKind == 'refuel' ? '15' : '24'" />
+					<text class="input-unit-sym">%</text>
+				</view>
+			</view>
+
+			<!-- 两列并排：折合单价 + 补能时间 -->
+			<view class="form-row-2">
+				<view class="form-col">
+					<text class="field-label">折合单价</text>
+					<input class="input-compact input-readonly" type="text" :value="fillUnit" disabled />
+				</view>
+				<view class="form-col">
+					<text class="field-label">补能时间</text>
+					<input class="input-compact" type="text" v-model="fillTime" placeholder="YYYY-MM-DD HH:mm" />
+				</view>
+			</view>
+
+			<!-- 备注输入 -->
+			<view class="form-block">
+				<text class="field-label">备注说明</text>
+				<input class="input-compact" type="text" v-model="fillNote" placeholder="如：特来电快充 / 92号满油" />
+			</view>
+
+			<!-- 底部保存大按钮 -->
+			<view class="save-box">
+				<button class="btn-save-record" :loading="fillBusy" @click="saveFill">
+					保存记账记录
+				</button>
+			</view>
+		</view>
+	</view>
+</template>
+
+<style scoped>
+	.modal-mask {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.6);
+		justify-content: flex-end;
+		z-index: 999;
+	}
+	.modal-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border-top-left-radius: 26px;
+		border-top-right-radius: 26px;
+		padding: 18px 20px 24px 20px;
+		max-height: 85%;
+		overflow-y: auto;
+		box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
+	}
+	.modal-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	.modal-title {
+		font-size: 16px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.close-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: 14px;
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.05));
+		justify-content: center;
+		align-items: center;
+	}
+	.close-txt {
+		font-size: 14px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	.kind-seg-box {
+		flex-direction: row;
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.05));
+		border-radius: 12px;
+		padding: 3px;
+		margin-bottom: 12px;
+	}
+	.kind-seg-btn {
+		flex: 1;
+		height: 34px;
+		border-radius: 10px;
+		justify-content: center;
+		align-items: center;
+	}
+	.kind-seg-charge {
+		background-color: var(--card-bg, #FFFFFF);
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+	}
+	.kind-seg-oil {
+		background-color: var(--card-bg, #FFFFFF);
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+	}
+	.kind-seg-txt {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-muted, #94A3B8);
+	}
+	.kind-txt-charge {
+		color: #059669;
+		font-weight: 700;
+	}
+	.kind-txt-oil {
+		color: #D97706;
+		font-weight: 700;
+	}
+
+	.error-msg {
+		font-size: 12px;
+		color: #DC2626;
+		margin-bottom: 8px;
+	}
+
+	.snapshot-card {
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.06));
+		border-radius: 14px;
+		padding: 10px 12px;
+		margin-bottom: 12px;
+	}
+	.snap-top-line {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+	.snap-top-title {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+	}
+	.snap-top-time {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.snap-mid-line {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: baseline;
+		margin-bottom: 4px;
+	}
+	.snap-mid-lbl {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.snap-mid-val {
+		font-size: 14px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.snap-bot-desc {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+		line-height: 14px;
+	}
+
+	.form-block {
+		margin-bottom: 10px;
+	}
+	.field-label {
+		font-size: 11px;
+		font-weight: 500;
+		color: var(--text-sub, #64748B);
+		margin-bottom: 4px;
+	}
+	.input-paid {
+		height: 44px;
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+		border-radius: 12px;
+		padding: 0 14px;
+		font-size: 16px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.02));
+	}
+	.form-row-2 {
+		flex-direction: row;
+		gap: 10px;
+		margin-bottom: 10px;
+	}
+	.form-col {
+		flex: 1;
+	}
+	.input-compact {
+		height: 38px;
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+		border-radius: 10px;
+		padding: 0 10px;
+		font-size: 13px;
+		color: var(--text-main, #0F172A);
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.02));
+	}
+	.input-unit-wrap {
+		position: relative;
+		justify-content: center;
+	}
+	.input-with-unit {
+		padding-right: 28px;
+	}
+	.input-unit-sym {
+		position: absolute;
+		right: 10px;
+		font-size: 12px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.input-readonly {
+		color: var(--text-muted, #94A3B8);
+	}
+
+	.delta-row {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin: 2px 2px 8px 2px;
+	}
+	.delta-text {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.edit-before-btn {
+		padding: 2px 4px;
+	}
+	.edit-before-txt {
+		font-size: 11px;
+		font-weight: 600;
+		color: #FF5722;
+	}
+	.before-wrap {
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.02));
+		border: 1px dashed var(--border-color, rgba(15, 23, 42, 0.15));
+		border-radius: 10px;
+		padding: 8px 10px;
+		margin-bottom: 10px;
+	}
+
+	.save-box {
+		margin-top: 14px;
+	}
+	.btn-save-record {
+		height: 44px;
+		border-radius: 14px;
+		background: linear-gradient(135deg, #FF7043 0%, #FF5722 100%);
+		color: #FFFFFF;
+		font-size: 15px;
+		font-weight: 700;
+		box-shadow: 0 4px 12px rgba(255, 87, 34, 0.3);
+	}
+</style>

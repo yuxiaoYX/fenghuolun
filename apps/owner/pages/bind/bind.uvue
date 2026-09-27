@@ -6,7 +6,7 @@
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
-	const mode = ref('sms')
+	const mode = ref('token')
 	const code = ref('')
 	const token = ref('')
 	const err = ref('')
@@ -92,7 +92,6 @@
 	}
 
 	const sendCode = async () => {
-		err.value = ''
 		if (left.value > 0 || busy.value == true) {
 			return
 		}
@@ -188,10 +187,10 @@
 			<!-- 模式分段选择器 -->
 			<view class="mode-seg-wrap">
 				<view class="mode-seg-pill" :class="mode == 'sms' ? 'mode-seg-active' : ''" @click="useSMS">
-					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码（推荐）</text>
+					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码</text>
 				</view>
 				<view class="mode-seg-pill" :class="mode == 'token' ? 'mode-seg-active' : ''" @click="useToken">
-					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（进阶）</text>
+					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（推荐）</text>
 				</view>
 			</view>
 

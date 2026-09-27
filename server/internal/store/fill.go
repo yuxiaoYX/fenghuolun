@@ -34,12 +34,34 @@ func (s *SQLite) upsertAutoFill(bindingID string, cand neta.Fill) error {
 	if from <= 0 || to <= 0 {
 		return nil
 	}
-	var row entity.FillEvent
+	var rows []entity.FillEvent
 	err := s.db.Model("fill_event").Ctx(s.ctx()).
 		Where("binding_id", bindingID).Where("kind", cand.Kind).
-		Where("from_fetched", from).Where("to_fetched", to).Scan(&row)
-	if err == nil && row.Id != "" {
+		Where("from_fetched", from).OrderAsc("created_at").Scan(&rows)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		// An ignored automatic event suppresses regeneration after the owner deletes it.
+		if row.Status == "ignored" {
+			return nil
+		}
+	}
+	if len(rows) > 0 {
+		row := rows[0]
+		for _, candidate := range rows {
+			if candidate.PaidCny != nil || candidate.Status == neta.FillRecorded {
+				row = candidate
+				break
+			}
+		}
 		if row.Status == neta.FillRecorded || row.PaidCny != nil {
+			// Keep a paid record's user-entered values, but remove duplicate drafts.
+			for _, duplicate := range rows {
+				if duplicate.Id != row.Id && duplicate.Status != "ignored" {
+					_, _ = s.db.Model("fill_event").Ctx(s.ctx()).Where("id", duplicate.Id).Delete()
+				}
+			}
 			return nil
 		}
 		_, err = s.db.Model("fill_event").Ctx(s.ctx()).Where("id", row.Id).Data(do.FillEvent{
@@ -52,6 +74,11 @@ func (s *SQLite) upsertAutoFill(bindingID string, cand neta.Fill) error {
 			FuelStart:  nvlFloat(cand.FuelStart),
 			FuelEnd:    nvlFloat(cand.FuelEnd),
 		}).Update()
+		for _, duplicate := range rows {
+			if duplicate.Id != row.Id {
+				_, _ = s.db.Model("fill_event").Ctx(s.ctx()).Where("id", duplicate.Id).Delete()
+			}
+		}
 		return err
 	}
 	id := NewSessionID()
@@ -63,6 +90,7 @@ func (s *SQLite) ListFills(bindingID string) ([]neta.Fill, error) {
 	_ = s.SyncFills(bindingID)
 	var rows []entity.FillEvent
 	if err := s.db.Model("fill_event").Ctx(s.ctx()).Where("binding_id", bindingID).
+		Where("status !=", "ignored").
 		OrderDesc("finished_at").OrderDesc("created_at").Scan(&rows); err != nil {
 		return nil, err
 	}
@@ -78,7 +106,7 @@ func (s *SQLite) GetFill(bindingID, id string) *neta.Fill {
 		return nil
 	}
 	var row entity.FillEvent
-	if err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", id).Where("binding_id", bindingID).Scan(&row); err != nil || row.Id == "" {
+	if err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", id).Where("binding_id", bindingID).Where("status !=", "ignored").Scan(&row); err != nil || row.Id == "" {
 		return nil
 	}
 	f := neta.AnnotateFill(fillFromRow(row))
@@ -110,6 +138,8 @@ func (s *SQLite) SaveFill(bindingID string, in neta.Fill) (neta.Fill, error) {
 	if in.Source == "" {
 		in.Source = neta.FillManual
 	}
+	startedProvided := !in.StartedAt.IsZero()
+	finishedProvided := !in.FinishedAt.IsZero()
 	if in.PaidCny != nil {
 		in.Status = neta.FillRecorded
 	} else {
@@ -131,7 +161,15 @@ func (s *SQLite) SaveFill(bindingID string, in neta.Fill) (neta.Fill, error) {
 		if cur == nil {
 			return neta.Fill{}, fmt.Errorf("not_found")
 		}
-		if in.Source == "" {
+		if !startedProvided {
+			in.StartedAt = cur.StartedAt
+		}
+		if !finishedProvided {
+			in.FinishedAt = cur.FinishedAt
+		}
+		// Editing an auto-detected draft must keep its provenance. The request
+		// body does not need to echo source just to add the receipt later.
+		if in.Source == neta.FillManual && cur.Source == neta.FillAuto {
 			in.Source = cur.Source
 		}
 		if in.FromFetched.IsZero() {
@@ -139,6 +177,41 @@ func (s *SQLite) SaveFill(bindingID string, in neta.Fill) (neta.Fill, error) {
 		}
 		if in.ToFetched.IsZero() {
 			in.ToFetched = cur.ToFetched
+		}
+		if in.OdoStart == nil {
+			in.OdoStart = cur.OdoStart
+		}
+		if in.OdoEnd == nil {
+			in.OdoEnd = cur.OdoEnd
+		}
+		if in.SocStart == nil {
+			in.SocStart = cur.SocStart
+		}
+		if in.SocEnd == nil {
+			in.SocEnd = cur.SocEnd
+		}
+		if in.FuelStart == nil {
+			in.FuelStart = cur.FuelStart
+		}
+		if in.FuelEnd == nil {
+			in.FuelEnd = cur.FuelEnd
+		}
+		if in.EnergyKwh == nil {
+			in.EnergyKwh = cur.EnergyKwh
+		}
+		if in.Liters == nil {
+			in.Liters = cur.Liters
+		}
+		if in.PaidCny == nil {
+			in.PaidCny = cur.PaidCny
+		}
+		if in.Note == "" {
+			in.Note = cur.Note
+		}
+		if in.PaidCny != nil {
+			in.Status = neta.FillRecorded
+		} else {
+			in.Status = neta.FillDraft
 		}
 		_, err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", in.ID).Where("binding_id", bindingID).Data(do.FillEvent{
 			Kind:       in.Kind,
@@ -170,6 +243,21 @@ func (s *SQLite) SaveFill(bindingID string, in neta.Fill) (neta.Fill, error) {
 func (s *SQLite) DeleteFill(bindingID, id string) error {
 	if bindingID == "" || id == "" {
 		return fmt.Errorf("not_found")
+	}
+	var row entity.FillEvent
+	if err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", id).Where("binding_id", bindingID).Scan(&row); err != nil || row.Id == "" {
+		return fmt.Errorf("not_found")
+	}
+	if row.Source == neta.FillAuto {
+		res, err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", id).Where("binding_id", bindingID).Data(do.FillEvent{Status: "ignored"}).Update()
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return fmt.Errorf("not_found")
+		}
+		return nil
 	}
 	res, err := s.db.Model("fill_event").Ctx(s.ctx()).Where("id", id).Where("binding_id", bindingID).Delete()
 	if err != nil {

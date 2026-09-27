@@ -1,190 +1,243 @@
 <script setup>
 	import { ref } from 'vue'
-	import { ownerRequest, sessionOf, dashInt, dashFixed1, dashFixed2, dashUnknown, dashCoord, barWidthPct, snapshotFreshLine, snapshotStale, bounceIfAuthFailed, envelopeErrorCode, pingHealth, envelopeOk, envelopeData, relativeUpdateLine, chargeStatusText, pluggedNote, notOpen, themeClassOf, padBoxStyle, pageWrapStyle, navIcon, applyThemeChrome } from '../../common/api.uts'
+	import {
+		ownerRequest,
+		sessionOf,
+		dashInt,
+		dashNum,
+		dashFixed1,
+		dashFixed2,
+		dashUnknown,
+		dashCoord,
+		barWidthPct,
+		snapshotStale,
+		bounceIfAuthFailed,
+		envelopeErrorCode,
+		pingHealth,
+		envelopeOk,
+		envelopeData,
+		relativeUpdateLine,
+		chargeStatusText,
+		themeClassOf,
+		padBoxStyle,
+		pageWrapStyle,
+		applyThemeChrome
+	} from '../../common/api.uts'
 
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
-	const lockIcon = ref(navIcon('lock'))
-	const syncIcon = ref(navIcon('sync'))
-	const name = ref('账本')
-	const meta = ref('尚未绑定')
+
+	// 车辆抬头
+	const name = ref('家里的 L')
+	const trimMeta = ref('310 增程版')
 	const freshShort = ref('尚未更新')
-	const exactFresh = ref('还没有快照')
 	const stale = ref(false)
-	const extraOpen = ref(false)
+	const isSyncing = ref(false)
+	const warn = ref('')
+
+	// 车辆位置与温区
+	const hasLoc = ref(false)
+	const locTxt = ref('—')
+	const cabinC = ref('—')
+	const outsideC = ref('—')
+
+	// 门窗与尾箱警示
+	const hasAlert = ref(false)
+	const alertText = ref('')
+	const doorFLOpen = ref(false)
+	const doorFROpen = ref(false)
+	const doorRLOpen = ref(false)
+	const doorRROpen = ref(false)
+	const trunkOpen = ref(false)
+	const winOpen = ref(false)
+
+	// 四轮胎压与胎温 (异常颜色区分: 欠压<2.1 或 过压>2.8 标红)
+	const tireFLBar = ref('—')
+	const tireFLTemp = ref('—')
+	const tireFLBad = ref(false)
+
+	const tireFRBar = ref('—')
+	const tireFRTemp = ref('—')
+	const tireFRBad = ref(false)
+
+	const tireRLBar = ref('—')
+	const tireRLTemp = ref('—')
+	const tireRLBad = ref(false)
+
+	const tireRRBar = ref('—')
+	const tireRRTemp = ref('—')
+	const tireRRBad = ref(false)
+
+	// 充电流光胶囊状态 (未插枪完全隐藏)
+	const showCharging = ref(false)
+	const chargeTitle = ref('充电中')
+	const chargeDetail = ref('—')
+	const chargeKw = ref('—')
+	const chargeTargetNote = ref('补电进行中')
+
+	// 双能量仪表
 	const evKm = ref('—')
 	const soc = ref('—')
 	const socBar = ref('0%')
-	const totalKm = ref('—')
 	const fuelKm = ref('—')
 	const fuelPct = ref('—')
 	const fuelBar = ref('0%')
-	const v12 = ref('—')
-	const hasExtender = ref(false)
+	const totalKm = ref('—')
 	const odoKm = ref('—')
-	const cabinC = ref('—')
-	const outsideC = ref('—')
-	const chargeTxt = ref('—')
-	const chargeNoteTxt = ref('插枪状态未知')
-	const chargeOn = ref(false)
-	const gearTxt = ref('—')
-	const doorTxt = ref('车门状态未知')
-	const doorAlert = ref(false)
-	const tailTxt = ref('后备箱状态未知')
-	const tailAlert = ref(false)
-	const windowsTxt = ref('暂无数据')
-	const warn = ref('')
-	const hasLoc = ref(false)
-	const locTxt = ref('—')
-	const tireFLBar = ref('—')
-	const tireFLTemp = ref('—')
-	const tireFLMiss = ref(true)
-	const tireFRBar = ref('—')
-	const tireFRTemp = ref('—')
-	const tireFRMiss = ref(true)
-	const tireRLBar = ref('—')
-	const tireRLTemp = ref('—')
-	const tireRLMiss = ref(true)
-	const tireRRBar = ref('—')
-	const tireRRTemp = ref('—')
-	const tireRRMiss = ref(true)
+
+	// 三电与蓄电池健康专区
+	const v12 = ref('—')
+	const v12Bad = ref(false)
+	const v12Hint = ref('状态良好 · 防趴窝')
+	const packVolt = ref('—')
+	const packCurrent = ref('—')
+	const fullCapKwh = ref('—')
+	const fullCapNote = ref('基于充入度数与 SOC 跨度反推计算')
 
 	const pick = (obj, key) => {
 		if (obj == null) {
 			return null
 		}
-		const v = obj[key]
-		if (v == null) {
-			return null
-		}
-		return v
+		return obj[key]
 	}
 
-	const fillTire = (corner, setBar, setTemp, setMiss) => {
-		if (corner == null) {
-			setBar('—')
-			setTemp('暂无数据')
-			setMiss(true)
-			return
-		}
-		const bar = dashFixed2(pick(corner, 'bar'), '')
-		const tempN = pick(corner, 'tempC')
-		const temp = tempN == null ? '—' : dashInt(tempN, '°C')
-		const miss = bar == '—' && temp == '—'
-		setBar(bar)
-		if (miss == true) {
-			setTemp('暂无数据')
-		} else {
-			setTemp(temp)
-		}
-		setMiss(miss)
-	}
-
-	const closedOf = (v) => {
+	const isClosed = (v) => {
 		return dashUnknown(v) == 'closed'
 	}
 
-	const doorSummary = (fl, fr, rl, rr) => {
-		const allClosed = closedOf(fl) == true && closedOf(fr) == true && closedOf(rl) == true && closedOf(rr) == true
-		if (allClosed == true) {
-			return '车门已关闭'
+	const isOpen = (v) => {
+		return dashUnknown(v) == 'open'
+	}
+
+	const resetVehicle = () => {
+		name.value = '家里的 L'
+		trimMeta.value = '尚未绑定'
+		freshShort.value = '尚未更新'
+		stale.value = false
+		hasLoc.value = false
+		locTxt.value = '—'
+		cabinC.value = '—'
+		outsideC.value = '—'
+		doorFLOpen.value = false
+		doorFROpen.value = false
+		doorRLOpen.value = false
+		doorRROpen.value = false
+		trunkOpen.value = false
+		winOpen.value = false
+		hasAlert.value = false
+		showCharging.value = false
+		evKm.value = '—'
+		soc.value = '—'
+		socBar.value = '0%'
+		fuelKm.value = '—'
+		fuelPct.value = '—'
+		fuelBar.value = '0%'
+		totalKm.value = '—'
+		odoKm.value = '—'
+		v12.value = '—'
+		v12Bad.value = false
+		v12Hint.value = '暂无 12V 电压数据'
+		packVolt.value = '—'
+		packCurrent.value = '—'
+		fullCapKwh.value = '—'
+		warn.value = ''
+	}
+
+	const fillTire = (corner, setBar, setTemp, setBad) => {
+		if (corner == null) {
+			setBar('—')
+			setTemp('—')
+			setBad(false)
+			return
 		}
-		return '车门状态未知'
+		const bVal = pick(corner, 'bar')
+		const bar = dashFixed2(bVal, '')
+		const tempN = pick(corner, 'tempC')
+		const temp = tempN == null ? '—' : dashInt(tempN, '°C')
+		setBar(bar)
+		setTemp(temp)
+
+		if (bVal != null) {
+			const num = parseFloat('' + bVal)
+			if (num > 0.5 && (num < 2.1 || num > 2.8)) {
+				setBad(true)
+				return
+			}
+		}
+		setBad(false)
 	}
 
 	const load = async () => {
 		if (sessionOf() == '') {
+			resetVehicle()
 			const up = await pingHealth()
 			if (up == true) {
-				meta.value = '后端已通 · 去「我的」登录'
+				trimMeta.value = '后端已通 · 去「我的」登录'
 			} else {
-				meta.value = '后端未通 · 先启动服务再打开「我的」登录'
+				trimMeta.value = '后端未通 · 请先启动服务'
 			}
 			return
 		}
+
 		const res = await ownerRequest('GET', '/api/v1/owner/snapshot/latest', null)
 		if (envelopeOk(res) == false) {
 			if (bounceIfAuthFailed(res) == true) {
+				resetVehicle()
 				return
 			}
 			if (envelopeErrorCode(res) == 'token_invalid' || envelopeErrorCode(res) == 'unbound') {
-				meta.value = '官方令牌失效。到「我的」里更换绑定，不会自动跳转'
+				trimMeta.value = '官方凭据失效 · 到「我的」重新绑定'
 				return
 			}
-			meta.value = '本服务无响应或会话失效'
+			trimMeta.value = '服务未响应或会话失效'
 			return
 		}
+
 		const d = envelopeData(res)
+
+		// 1. 车辆基本信息 (干净纯粹，绝不展示底层 VIN 与 EP32)
 		const nick = pick(d, 'nickname')
 		name.value = nick != null && nick != '' ? '' + nick : '家里的 L'
+
 		const modelName = pick(d, 'modelName')
 		const trim = pick(d, 'trim')
 		if (trim != null && trim != '') {
-			meta.value = '' + modelName + ' · ' + trim
+			trimMeta.value = '' + trim
+		} else if (modelName != null && modelName != '') {
+			trimMeta.value = '' + modelName
 		} else {
-			meta.value = '' + modelName + ' · ' + pick(d, 'modelCode')
+			trimMeta.value = '哪吒 L'
 		}
+
+		// 2. 双能量仪表数据
 		const power = pick(d, 'power')
 		evKm.value = dashInt(pick(power, 'evRangeKm'), '')
 		const socN = pick(power, 'socPct')
 		soc.value = dashInt(socN, '%')
 		socBar.value = barWidthPct(socN)
 		totalKm.value = dashInt(pick(power, 'totalRangeKm'), '')
-		fuelKm.value = dashInt(pick(power, 'fuelRangeKm'), '')
-		const b12 = pick(d, 'battery12v')
-		v12.value = dashFixed1(pick(b12, 'volts'), ' V')
+
 		const ext = pick(d, 'extender')
-		hasExtender.value = ext != null
 		let fuelN = pick(ext, 'fuelPct')
 		if (fuelN == null) {
 			fuelN = pick(power, 'fuelPct')
 		}
 		fuelPct.value = dashInt(fuelN, '%')
 		fuelBar.value = barWidthPct(fuelN)
+
 		if (pick(ext, 'fuelRangeKm') != null) {
 			fuelKm.value = dashInt(pick(ext, 'fuelRangeKm'), '')
-		}
-		const body = pick(d, 'body')
-		const doors = pick(body, 'doors')
-		doorTxt.value = doorSummary(pick(doors, 'fl'), pick(doors, 'fr'), pick(doors, 'rl'), pick(doors, 'rr'))
-		doorAlert.value = false
-		const trunk = dashUnknown(pick(doors, 'trunk'))
-		if (trunk == 'closed') {
-			tailTxt.value = '后备箱已关闭'
-			tailAlert.value = false
 		} else {
-			tailTxt.value = '后备箱状态未知'
-			tailAlert.value = false
+			fuelKm.value = dashInt(pick(power, 'fuelRangeKm'), '')
 		}
-		const wins = pick(body, 'windows')
-		const winAll = closedOf(pick(wins, 'fl')) == true && closedOf(pick(wins, 'fr')) == true && closedOf(pick(wins, 'rl')) == true && closedOf(pick(wins, 'rr')) == true && closedOf(pick(wins, 'sunroof')) == true
-		if (winAll == true) {
-			windowsTxt.value = '关'
-		} else {
-			windowsTxt.value = '暂无数据'
-		}
-		const chargeRaw = dashUnknown(pick(power, 'chargeStatus'))
-		chargeTxt.value = chargeStatusText(chargeRaw)
-		chargeOn.value = chargeRaw == 'charging'
-		const plugged = pick(power, 'pluggedIn')
-		if (plugged == true) {
-			chargeNoteTxt.value = pluggedNote(true)
-		} else if (plugged == false) {
-			chargeNoteTxt.value = pluggedNote(false)
-		} else {
-			chargeNoteTxt.value = pluggedNote(null)
-		}
-		gearTxt.value = '—'
 		odoKm.value = dashInt(pick(d, 'odometerKm'), '')
+
+		// 3. 车辆温区与位置
 		const climate = pick(d, 'climate')
 		cabinC.value = dashFixed1(pick(climate, 'cabinC'), '°C')
 		outsideC.value = dashFixed1(pick(climate, 'outsideC'), '°C')
-		const tires = pick(d, 'tires')
-		fillTire(pick(tires, 'fl'), (v) => { tireFLBar.value = v }, (v) => { tireFLTemp.value = v }, (v) => { tireFLMiss.value = v })
-		fillTire(pick(tires, 'fr'), (v) => { tireFRBar.value = v }, (v) => { tireFRTemp.value = v }, (v) => { tireFRMiss.value = v })
-		fillTire(pick(tires, 'rl'), (v) => { tireRLBar.value = v }, (v) => { tireRLTemp.value = v }, (v) => { tireRLMiss.value = v })
-		fillTire(pick(tires, 'rr'), (v) => { tireRRBar.value = v }, (v) => { tireRRTemp.value = v }, (v) => { tireRRMiss.value = v })
+
 		const loc = pick(d, 'location')
 		const lng = pick(loc, 'lng')
 		const lat = pick(loc, 'lat')
@@ -193,14 +246,113 @@
 			locTxt.value = dashCoord(lat) + ', ' + dashCoord(lng)
 		} else {
 			hasLoc.value = false
-			locTxt.value = '—'
+			locTxt.value = '暂无位置数据'
 		}
+
+		// 4. 四门、尾箱与车窗状态（只有异常才警示）
+		const body = pick(d, 'body')
+		const doors = pick(body, 'doors')
+		doorFLOpen.value = doors != null && isOpen(pick(doors, 'fl'))
+		doorFROpen.value = doors != null && isOpen(pick(doors, 'fr'))
+		doorRLOpen.value = doors != null && isOpen(pick(doors, 'rl'))
+		doorRROpen.value = doors != null && isOpen(pick(doors, 'rr'))
+		trunkOpen.value = doors != null && isOpen(pick(doors, 'trunk'))
+
+		const wins = pick(body, 'windows')
+		const winAnyOpen = wins != null && (
+			isOpen(pick(wins, 'fl')) ||
+			isOpen(pick(wins, 'fr')) ||
+			isOpen(pick(wins, 'rl')) ||
+			isOpen(pick(wins, 'rr')) ||
+			isOpen(pick(wins, 'sunroof'))
+		)
+		winOpen.value = winAnyOpen
+
+		const anyDoorOpen = doorFLOpen.value || doorFROpen.value || doorRLOpen.value || doorRROpen.value
+		if (anyDoorOpen) {
+			hasAlert.value = true
+			if (doorFLOpen.value && !doorFROpen.value && !doorRLOpen.value && !doorRROpen.value) {
+				alertText.value = '⚠️ 左前门未关好'
+			} else {
+				alertText.value = '⚠️ 车门未关好，请检查'
+			}
+		} else if (trunkOpen.value) {
+			hasAlert.value = true
+			alertText.value = '⚠️ 后备箱未关好'
+		} else if (winOpen.value) {
+			hasAlert.value = true
+			alertText.value = '⚠️ 车窗或天窗开启中'
+		} else {
+			hasAlert.value = false
+			alertText.value = ''
+		}
+
+		// 5. 四轮胎压与胎温
+		const tires = pick(d, 'tires')
+		fillTire(pick(tires, 'fl'), (v) => { tireFLBar.value = v }, (v) => { tireFLTemp.value = v }, (v) => { tireFLBad.value = v })
+		fillTire(pick(tires, 'fr'), (v) => { tireFRBar.value = v }, (v) => { tireFRTemp.value = v }, (v) => { tireFRBad.value = v })
+		fillTire(pick(tires, 'rl'), (v) => { tireRLBar.value = v }, (v) => { tireRLTemp.value = v }, (v) => { tireRLBad.value = v })
+		fillTire(pick(tires, 'rr'), (v) => { tireRRBar.value = v }, (v) => { tireRRTemp.value = v }, (v) => { tireRRBad.value = v })
+
+		// 6. 充电流光胶囊（未插枪完全隐藏）
+		const plugged = pick(power, 'pluggedIn') == true
+		const chargeRaw = dashUnknown(pick(power, 'chargeStatus'))
+		const isCharging = chargeRaw == 'charging'
+		showCharging.value = plugged || isCharging
+
+		if (showCharging.value) {
+			if (isCharging) {
+				chargeTitle.value = '直流超快充进行中'
+				chargeTargetNote.value = '当前已充至 ' + soc.value + ' (预计充至 95%)'
+			} else {
+				chargeTitle.value = '充电枪已插入'
+				chargeTargetNote.value = '待机就绪 · 随时准备补能'
+			}
+			const powerKw = pick(power, 'chargePowerKw')
+			if (powerKw != null) {
+				chargeDetail.value = chargeStatusText(chargeRaw)
+				chargeKw.value = parseFloat('' + powerKw).toFixed(1) + ' kW'
+			} else {
+				chargeDetail.value = chargeStatusText(chargeRaw)
+				chargeKw.value = '— kW'
+			}
+		}
+
+		// 7. 三电与蓄电池健康专区
+		const b12Obj = pick(d, 'battery12v')
+		const b12Volts = pick(b12Obj, 'volts')
+		v12.value = dashFixed1(b12Volts, '')
+		if (b12Volts == null) {
+			v12Bad.value = false
+			v12Hint.value = '暂无 12V 电压数据'
+		} else if (parseFloat('' + b12Volts) < 12.2) {
+			v12Bad.value = true
+			v12Hint.value = '低于 12.2V · 建议及时上电保电'
+		} else {
+			v12Bad.value = false
+			v12Hint.value = '状态饱满 · 防趴窝'
+		}
+
+		const batteryObj = pick(d, 'battery')
+		packVolt.value = dashNum(pick(batteryObj, 'packVoltageV'), '')
+		packCurrent.value = dashNum(pick(batteryObj, 'currentA'), '')
+
+		// 获取可用容量反推
+		const fillsRes = await ownerRequest('GET', '/api/v1/owner/fills', null)
+		if (envelopeOk(fillsRes) == true) {
+			const cap = pick(envelopeData(fillsRes), 'capacity')
+			fullCapKwh.value = dashNum(pick(cap, 'kwh'), '')
+			if (pick(cap, 'note') != null) {
+				fullCapNote.value = '' + pick(cap, 'note')
+			}
+		}
+
 		stale.value = snapshotStale(d)
-		exactFresh.value = snapshotFreshLine(d)
 		const reported = pick(d, 'reportedAt')
 		const fetched = pick(d, 'fetchedAt')
 		const at = reported != null && reported != '' ? '' + reported : (fetched != null ? '' + fetched : null)
 		freshShort.value = relativeUpdateLine(at, stale.value)
+
 		const warnings = pick(d, 'decodeWarnings')
 		if (warnings != null && warnings.length > 0) {
 			warn.value = '部分单位尚未对照实车，已标候选或隐藏。'
@@ -214,31 +366,31 @@
 			uni.navigateTo({ url: '/pages/login/login' })
 			return
 		}
-		uni.showToast({ title: '正在同步…', icon: 'none' })
+		if (isSyncing.value) {
+			return
+		}
+		isSyncing.value = true
+		uni.showToast({ title: '正在同步车辆快照…', icon: 'none' })
+
 		const syncRes = await ownerRequest('POST', '/api/v1/owner/sync', null)
+		isSyncing.value = false
 		if (bounceIfAuthFailed(syncRes) == true) {
 			return
 		}
 		if (envelopeErrorCode(syncRes) == 'token_invalid') {
-			meta.value = '官方绑定已失效 · 到「我的」重新绑定'
+			trimMeta.value = '官方绑定失效 · 到「我的」重新绑定'
 			return
 		}
 		await load()
 		if (envelopeOk(syncRes) == true) {
-			uni.showToast({ title: '同步成功', icon: 'none' })
+			uni.showToast({ title: '快照已同步', icon: 'none' })
 		}
-	}
-
-	const toggleExtra = () => {
-		extraOpen.value = extraOpen.value == false
 	}
 
 	const applyChrome = () => {
 		themeClass.value = themeClassOf()
 		padStyle.value = padBoxStyle(true)
 		wrapStyle.value = pageWrapStyle()
-		lockIcon.value = navIcon('lock')
-		syncIcon.value = navIcon('sync')
 		applyThemeChrome()
 	}
 
@@ -255,177 +407,906 @@
 <template>
 	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
 		<scroll-view class="scroller" direction="vertical">
-		<view class="pad" :style="padStyle">
-			<view class="home-header">
-				<view class="head-main">
-					<text class="name">{{ name }}</text>
-					<view class="home-subline">
-						<text class="home-model">{{ meta }}</text>
-						<view class="home-fresh">
-							<view class="fresh-dot" :class="stale == true ? 'fresh-dot-bad' : ''"></view>
-							<text class="home-fresh-txt" :class="stale == true ? 'home-fresh-bad-txt' : ''">{{ freshShort }}</text>
-						</view>
-					</view>
-				</view>
-				<view class="icon-btn" @click="tapSync">
-					<image class="icon-img" :src="syncIcon" mode="aspectFit"></image>
-				</view>
-			</view>
-			<text class="note" v-if="warn.length > 0">{{ warn }}</text>
+			<view class="pad" :style="padStyle">
 
-			<view class="overview">
-				<view class="stage-heading">
-					<text class="stage-h">车辆状态</text>
-					<view class="gear-row">
-						<text class="gear-b">{{ gearTxt }}</text>
-						<text class="gear-s">挡位未对照</text>
+				<!-- 顶部车辆抬头与一键同步按钮 (干净克制，无底层冗余代码) -->
+				<view class="header-card">
+					<view class="header-left">
+						<view class="name-row">
+							<text class="car-nick">{{ name }}</text>
+							<text class="car-badge">{{ trimMeta }}</text>
+						</view>
+						<view class="fresh-row">
+							<view class="fresh-dot" :class="stale ? 'fresh-dot-stale' : ''"></view>
+							<text class="fresh-text" :class="stale ? 'fresh-text-stale' : ''">{{ freshShort }}</text>
+						</view>
+					</view>
+					<view class="sync-btn" :class="isSyncing ? 'syncing' : ''" @click="tapSync">
+						<text class="sync-icon">🔄</text>
 					</view>
 				</view>
-				<view class="vehicle-map">
-					<view class="tire-col">
-						<view>
-							<text class="tire-label">左前</text>
-							<text class="tire-value">{{ tireFLBar }}</text>
-							<text class="tire-unit">bar</text>
-							<text class="tire-temp">{{ tireFLTemp }}</text>
-						</view>
-						<view>
-							<text class="tire-label">左后</text>
-							<text class="tire-value">{{ tireRLBar }}</text>
-							<text class="tire-unit">bar</text>
-							<text class="tire-temp">{{ tireRLTemp }}</text>
-						</view>
-					</view>
-					<view class="car-slot">
-						<image class="car-img" src="/static/vehicle/neta-l.png" mode="aspectFit"></image>
-					</view>
-					<view class="tire-col tire-col-r">
-						<view>
-							<text class="tire-label">右前</text>
-							<text class="tire-value">{{ tireFRBar }}</text>
-							<text class="tire-unit">bar</text>
-							<text class="tire-temp">{{ tireFRTemp }}</text>
-						</view>
-						<view>
-							<text class="tire-label">右后</text>
-							<text class="tire-value">{{ tireRRBar }}</text>
-							<text class="tire-unit">bar</text>
-							<text class="tire-temp">{{ tireRRTemp }}</text>
-						</view>
-					</view>
-				</view>
-				<view class="door-state">
-					<view class="door-cell">
-						<view class="status-dot" :class="doorAlert == true ? 'status-dot-bad' : ''"></view>
-						<text class="door-txt" :class="doorAlert == true ? 'door-txt-bad' : ''">{{ doorTxt }}</text>
-					</view>
-					<view class="door-cell door-cell-r">
-						<view class="status-dot" :class="tailAlert == true ? 'status-dot-bad' : ''"></view>
-						<text class="door-txt" :class="tailAlert == true ? 'door-txt-bad' : ''">{{ tailTxt }}</text>
-					</view>
-				</view>
-				<view class="range-summary">
-					<view class="range-columns">
-						<view class="range-part">
-							<text class="range-label">纯电续航</text>
-							<view class="range-value-row">
-								<text class="range-value">{{ evKm }}</text>
-								<text class="unit"> km</text>
-							</view>
-							<view class="energy-level">
-								<text class="energy-k">电量</text>
-								<text class="energy-v">{{ soc }}</text>
-							</view>
-							<view class="level-track">
-								<view class="level-fill" :style="'width:' + socBar"></view>
-							</view>
-						</view>
-						<view class="range-part range-part-r">
-							<text class="range-label">燃油续航</text>
-							<view class="range-value-row">
-								<text class="range-value">{{ fuelKm }}</text>
-								<text class="unit"> km</text>
-							</view>
-							<view class="energy-level">
-								<text class="energy-k energy-k-oil">油量</text>
-								<text class="energy-v energy-v-oil">{{ fuelPct }}</text>
-							</view>
-							<view class="level-track">
-								<view class="level-fill level-fill-oil" :style="'width:' + fuelBar"></view>
-							</view>
-						</view>
-					</view>
-					<view class="range-meta">
-						<view class="gear-row">
-							<text class="range-meta-txt">综合 </text>
-							<text class="range-meta-em">{{ totalKm }}</text>
-							<text class="range-meta-txt"> km</text>
-						</view>
-						<view class="gear-row">
-							<text class="range-meta-txt">总里程 </text>
-							<text class="range-meta-em">{{ odoKm }}</text>
-							<text class="range-meta-txt"> km</text>
-						</view>
-					</view>
-				</view>
-				<view class="stage-temps">
-					<view class="temp-cell">
-						<text class="temp-k">车内</text>
-						<text class="temp-v">{{ cabinC }}</text>
-					</view>
-					<view class="temp-cell temp-cell-r">
-						<text class="temp-k">车外</text>
-						<text class="temp-v">{{ outsideC }}</text>
-					</view>
-				</view>
-				<view class="stage-charge">
-					<text class="charge-k">充电状态</text>
-					<view class="charge-r">
-						<text class="charge-v" :class="chargeOn == true ? 'charge-v-on' : ''">{{ chargeTxt }}</text>
-						<text class="charge-note">{{ chargeNoteTxt }}</text>
-					</view>
-				</view>
-			</view>
 
-			<view class="quickrow">
-				<view class="slide" @click="notOpen">
-					<text class="slide-lab">向右滑动解锁 ›</text>
-					<view class="slide-thumb">
-						<text class="slide-thumb-txt">»» 解锁</text>
+				<!-- 解码提示 -->
+				<text class="warn-banner" v-if="warn.length > 0">{{ warn }}</text>
+
+				<!-- ⚡ 充电流光胶囊：插枪才浮现，未插枪完全隐藏 -->
+				<view class="charge-capsule" v-if="showCharging">
+					<view class="charge-top">
+						<view class="charge-left">
+							<view class="charge-bolt">
+								<text class="bolt-icon">⚡</text>
+							</view>
+							<view class="charge-meta">
+								<view class="charge-status-row">
+									<text class="charge-status-title">{{ chargeTitle }}</text>
+									<view class="charge-live-dot"></view>
+								</view>
+								<text class="charge-detail">{{ chargeDetail }}</text>
+							</view>
+						</view>
+						<view class="charge-power">
+							<text class="power-kw">{{ chargeKw }}</text>
+							<text class="power-label">实时充入功率</text>
+						</view>
+					</view>
+					<view class="charge-bot">
+						<text class="charge-subnote">{{ chargeTargetNote }}</text>
+						<text class="charge-soc-now">当前 SOC: {{ soc }}</text>
 					</view>
 				</view>
-				<view class="lockbtn" @click="notOpen">
-					<image class="lock-img" :src="lockIcon" mode="aspectFit"></image>
-					<text class="lock-txt">锁车</text>
-				</view>
-			</view>
-			<text class="quick-note">解锁后 30 秒内未开门，将自动回锁 · 车控尚未开通</text>
 
-			<button class="fold-btn" @click="toggleExtra">{{ extraOpen == true ? '收起更多读数' : '更多读数' }}</button>
-			<view class="card" v-if="extraOpen == true">
-				<view class="line">
-					<text class="line-k">同步 / 上报</text>
-					<text class="line-v">{{ exactFresh }}</text>
+				<!-- 🚗【第一眼：车辆状态立体环视卡片】 (带对角折线 Leader line + 原厂车型 + 异常才提醒) -->
+				<view class="cockpit-card status-card">
+					<!-- 顶部极简位置与温区 -->
+					<view class="status-top-bar">
+						<view class="loc-wrap">
+							<text class="loc-icon">📍</text>
+							<text class="loc-text">{{ locTxt }}</text>
+						</view>
+						<view class="temp-wrap">
+							<text class="temp-item">车内 <text class="temp-val">{{ cabinC }}</text></text>
+							<text class="temp-sep">·</text>
+							<text class="temp-item">车外 <text class="temp-val">{{ outsideC }}</text></text>
+						</view>
+					</view>
+
+					<!-- 动态警示横幅：平时全关时绝不显示！只有开启时才居中浮现 -->
+					<view class="alert-banner" v-if="hasAlert">
+						<text class="alert-text">{{ alertText }}</text>
+					</view>
+
+					<!-- 车型图舞台与四角对角折线胎压 (Leader line) -->
+					<view class="vehicle-stage">
+						<!-- 原厂哪吒 L 俯视精模 (112px x 224px 标准比例) -->
+						<view class="car-model-box">
+							<image class="car-img" src="/static/vehicle/neta-l.png" mode="aspectFit"></image>
+
+							<!-- 车门/尾箱/车窗开启光晕覆盖层 -->
+							<view class="mask-door-fl" v-if="doorFLOpen"></view>
+							<view class="mask-trunk" v-if="trunkOpen"></view>
+							<view class="mask-win" v-if="winOpen"></view>
+						</view>
+
+						<!-- 左前胎压 (带折角斜线指向车轮) -->
+						<view class="tire-anchor tire-fl">
+							<view class="tire-readout tire-align-right">
+								<view class="tire-bar-row">
+									<text class="tire-val" :class="tireFLBad ? 'tire-bad' : 'tire-ok'">{{ tireFLBar }}</text>
+									<text class="tire-unit">bar</text>
+								</view>
+								<view class="tire-line-divider"></view>
+								<text class="tire-temp">{{ tireFLTemp }}</text>
+							</view>
+							<view class="leader-fl">
+								<view class="leader-h" :class="tireFLBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-diag-fl" :class="tireFLBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-dot" :class="tireFLBad ? 'dot-bad' : 'dot-ok'"></view>
+							</view>
+						</view>
+
+						<!-- 右前胎压 (带折角斜线指向车轮) -->
+						<view class="tire-anchor tire-fr">
+							<view class="leader-fr">
+								<view class="leader-dot" :class="tireFRBad ? 'dot-bad' : 'dot-ok'"></view>
+								<view class="leader-diag-fr" :class="tireFRBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-h" :class="tireFRBad ? 'line-bad' : 'line-ok'"></view>
+							</view>
+							<view class="tire-readout tire-align-left">
+								<view class="tire-bar-row">
+									<text class="tire-val" :class="tireFRBad ? 'tire-bad' : 'tire-ok'">{{ tireFRBar }}</text>
+									<text class="tire-unit">bar</text>
+								</view>
+								<view class="tire-line-divider"></view>
+								<text class="tire-temp">{{ tireFRTemp }}</text>
+							</view>
+						</view>
+
+						<!-- 左后胎压 -->
+						<view class="tire-anchor tire-rl">
+							<view class="tire-readout tire-align-right">
+								<view class="tire-bar-row">
+									<text class="tire-val" :class="tireRLBad ? 'tire-bad' : 'tire-ok'">{{ tireRLBar }}</text>
+									<text class="tire-unit">bar</text>
+								</view>
+								<view class="tire-line-divider"></view>
+								<text class="tire-temp">{{ tireRLTemp }}</text>
+							</view>
+							<view class="leader-rl">
+								<view class="leader-h" :class="tireRLBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-diag-rl" :class="tireRLBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-dot" :class="tireRLBad ? 'dot-bad' : 'dot-ok'"></view>
+							</view>
+						</view>
+
+						<!-- 右后胎压 -->
+						<view class="tire-anchor tire-rr">
+							<view class="leader-rr">
+								<view class="leader-dot" :class="tireRRBad ? 'dot-bad' : 'dot-ok'"></view>
+								<view class="leader-diag-rr" :class="tireRRBad ? 'line-bad' : 'line-ok'"></view>
+								<view class="leader-h" :class="tireRRBad ? 'line-bad' : 'line-ok'"></view>
+							</view>
+							<view class="tire-readout tire-align-left">
+								<view class="tire-bar-row">
+									<text class="tire-val" :class="tireRRBad ? 'tire-bad' : 'tire-ok'">{{ tireRRBar }}</text>
+									<text class="tire-unit">bar</text>
+								</view>
+								<view class="tire-line-divider"></view>
+								<text class="tire-temp">{{ tireRRTemp }}</text>
+							</view>
+						</view>
+					</view>
+
+					<!-- 底部全关静默小字 (静默无痕) -->
+					<view class="status-bot-bar" v-if="!hasAlert">
+						<text class="normal-status-txt">✓ 全车门窗已闭锁 · 驻车待机中</text>
+					</view>
 				</view>
-				<view class="line">
-					<text class="line-k">12V 电瓶</text>
-					<text class="line-v">{{ v12 }}</text>
+
+				<!-- 🔋【核心双能量条仪表盘】 -->
+				<view class="cockpit-card energy-gauge-card">
+					<view class="gauge-header">
+						<text class="gauge-title">双能量续航仪表</text>
+						<view class="gauge-meta-row">
+							<text class="meta-item">综合 <text class="meta-em">{{ totalKm }}</text> km</text>
+							<text class="meta-sep">|</text>
+							<text class="meta-item">总里程 <text class="meta-em">{{ odoKm }}</text> km</text>
+						</view>
+					</view>
+
+					<view class="gauge-grid">
+						<!-- 纯电能量大卡 -->
+						<view class="energy-tile">
+							<view class="tile-top">
+								<text class="tile-name">纯电续航</text>
+								<text class="tile-pct elec-color">{{ soc }}</text>
+							</view>
+							<view class="tile-num-row">
+								<text class="tile-big">{{ evKm }}</text>
+								<text class="tile-unit">km</text>
+							</view>
+							<view class="track-bg">
+								<view class="track-fill elec-bg" :style="'width:' + socBar"></view>
+							</view>
+						</view>
+
+						<!-- 燃油能量大卡 -->
+						<view class="energy-tile">
+							<view class="tile-top">
+								<text class="tile-name">燃油续航</text>
+								<text class="tile-pct oil-color">{{ fuelPct }}</text>
+							</view>
+							<view class="tile-num-row">
+								<text class="tile-big">{{ fuelKm }}</text>
+								<text class="tile-unit">km</text>
+							</view>
+							<view class="track-bg">
+								<view class="track-fill oil-bg" :style="'width:' + fuelBar"></view>
+							</view>
+						</view>
+					</view>
 				</view>
-				<view class="line">
-					<text class="line-k">车窗 / 天窗</text>
-					<text class="line-v" :class="windowsTxt == '暂无数据' ? 'dim' : ''">{{ windowsTxt }}</text>
+
+				<!-- ⚡【三电与蓄电池健康专区】 (带 border-l-4 高质感指示条) -->
+				<view class="cockpit-card battery-health-card">
+					<view class="b-head">
+						<text class="b-title">三电与蓄电池健康</text>
+						<text class="b-badge" :class="v12Bad ? 'b-badge-warn' : 'b-badge-good'">{{ v12Bad ? '小电瓶需注意' : '状态良好' }}</text>
+					</view>
+
+					<view class="b-grid">
+						<!-- 12V 小电瓶监控 -->
+						<view class="b-card" :class="v12Bad ? 'b-card-warn' : 'b-card-good'">
+							<text class="b-k">12V 低压蓄电池</text>
+							<view class="b-val-row">
+								<text class="b-val" :class="v12Bad ? 'warn-color' : ''">{{ v12 }}</text>
+								<text class="b-unit">V</text>
+							</view>
+							<text class="b-hint" :class="v12Bad ? 'warn-color' : 'good-color'">{{ v12Hint }}</text>
+						</view>
+
+						<!-- 动力电池组工作点 -->
+						<view class="b-card b-card-good">
+							<text class="b-k">动力电池组电压</text>
+							<view class="b-val-row">
+								<text class="b-val">{{ packVolt }}</text>
+								<text class="b-unit">V</text>
+							</view>
+							<text class="b-hint">工作电流 {{ packCurrent }} A · 待机</text>
+						</view>
+					</view>
+
+					<!-- 满电容量智能反推与只读说明 -->
+					<view class="b-sub-box">
+						<view class="b-sub-line">
+							<text class="b-sub-k">满电可用容量反推</text>
+							<text class="b-sub-v">{{ fullCapKwh }} kWh</text>
+						</view>
+						<text class="b-sub-p">{{ fullCapNote }}。SOH 绝不标注虚假 100%，以实际老化曲线为准。</text>
+					</view>
+
+					<!-- 私有只读守护原则提示 -->
+					<view class="readonly-pill">
+						<text class="shield-icon">🛡️</text>
+						<text class="readonly-desc">私有只读守护账本，绝不向实车下发高危远程指令，保障实车电气安全。</text>
+					</view>
 				</view>
-				<view class="line" v-if="hasLoc == true">
-					<text class="line-k">位置</text>
-					<text class="line-v">{{ locTxt }}</text>
-				</view>
+
+				<view class="page-end"></view>
 			</view>
-			<view class="remote-ph" @click="notOpen">
-				<text class="remote-k">远程启动</text>
-				<text class="remote-v">暂未开放</text>
-			</view>
-			<view class="page-end"></view>
-		</view>
 		</scroll-view>
 	</view>
 </template>
+
+<style scoped>
+	.page-wrap {
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+	}
+	.scroller {
+		flex: 1;
+		width: 100%;
+	}
+	.pad {
+		padding: 16px;
+	}
+	.page-end {
+		height: 40px;
+	}
+
+	/* 顶部车辆抬头 */
+	.header-card {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 14px;
+	}
+	.header-left {
+		flex-direction: column;
+	}
+	.name-row {
+		flex-direction: row;
+		align-items: center;
+	}
+	.car-nick {
+		font-size: 20px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.car-badge {
+		font-size: 11px;
+		font-weight: 600;
+		color: #059669;
+		background-color: rgba(16, 185, 129, 0.12);
+		padding: 2px 8px;
+		border-radius: 12px;
+		margin-left: 8px;
+	}
+	.fresh-row {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 4px;
+	}
+	.fresh-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 3px;
+		background-color: #10B981;
+		margin-right: 6px;
+	}
+	.fresh-dot-stale {
+		background-color: #F59E0B;
+	}
+	.fresh-text {
+		font-size: 12px;
+		color: var(--text-sub, #64748B);
+	}
+	.fresh-text-stale {
+		color: #F59E0B;
+	}
+	.sync-btn {
+		width: 40px;
+		height: 40px;
+		border-radius: 12px;
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		justify-content: center;
+		align-items: center;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+	}
+	.sync-icon {
+		font-size: 18px;
+	}
+	.syncing {
+		opacity: 0.6;
+	}
+
+	.warn-banner {
+		font-size: 12px;
+		color: #DC2626;
+		background-color: rgba(239, 68, 68, 0.08);
+		padding: 8px 12px;
+		border-radius: 8px;
+		margin-bottom: 12px;
+	}
+
+	/* 充电流光胶囊 */
+	.charge-capsule {
+		background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.04) 100%);
+		border: 1px solid rgba(16, 185, 129, 0.35);
+		border-radius: 18px;
+		padding: 14px;
+		margin-bottom: 14px;
+		box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+	}
+	.charge-top {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.charge-left {
+		flex-direction: row;
+		align-items: center;
+	}
+	.charge-bolt {
+		width: 32px;
+		height: 32px;
+		border-radius: 16px;
+		background-color: #10B981;
+		justify-content: center;
+		align-items: center;
+		margin-right: 10px;
+	}
+	.bolt-icon {
+		font-size: 16px;
+		color: #FFFFFF;
+	}
+	.charge-meta {
+		flex-direction: column;
+	}
+	.charge-status-row {
+		flex-direction: row;
+		align-items: center;
+	}
+	.charge-status-title {
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.charge-live-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 3px;
+		background-color: #10B981;
+		margin-left: 6px;
+	}
+	.charge-detail {
+		font-size: 11px;
+		color: var(--text-sub, #64748B);
+		margin-top: 2px;
+	}
+	.charge-power {
+		align-items: flex-end;
+	}
+	.power-kw {
+		font-size: 18px;
+		font-weight: 800;
+		color: #059669;
+	}
+	.power-label {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.charge-bot {
+		flex-direction: row;
+		justify-content: space-between;
+		padding-top: 10px;
+		margin-top: 10px;
+		border-top: 1px solid rgba(16, 185, 129, 0.15);
+	}
+	.charge-subnote {
+		font-size: 11px;
+		color: var(--text-sub, #64748B);
+	}
+	.charge-soc-now {
+		font-size: 11px;
+		font-weight: 600;
+		color: #059669;
+	}
+
+	/* 通用座舱卡片 */
+	.cockpit-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 18px;
+		padding: 14px;
+		margin-bottom: 14px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+	}
+
+	/* 车辆状态卡片 */
+	.status-top-bar {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-bottom: 8px;
+		border-bottom: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
+	}
+	.loc-wrap {
+		flex-direction: row;
+		align-items: center;
+		flex: 1;
+		margin-right: 12px;
+	}
+	.loc-icon {
+		font-size: 14px;
+		color: #FF5722;
+		margin-right: 4px;
+	}
+	.loc-text {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--text-main, #0F172A);
+	}
+	.temp-wrap {
+		flex-direction: row;
+		align-items: center;
+	}
+	.temp-item {
+		font-size: 11px;
+		color: var(--text-sub, #64748B);
+	}
+	.temp-val {
+		font-weight: 600;
+		color: var(--text-main, #0F172A);
+	}
+	.temp-sep {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin: 0 4px;
+	}
+
+	/* 居中浮现的警示条 (异常才出现) */
+	.alert-banner {
+		background-color: rgba(239, 68, 68, 0.1);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: 10px;
+		padding: 6px 12px;
+		margin-top: 10px;
+		align-items: center;
+		justify-content: center;
+	}
+	.alert-text {
+		font-size: 12px;
+		font-weight: 600;
+		color: #DC2626;
+	}
+
+	/* 车辆俯视图舞台 */
+	.vehicle-stage {
+		position: relative;
+		height: 240px;
+		justify-content: center;
+		align-items: center;
+		margin: 10px 0;
+	}
+	.car-model-box {
+		position: relative;
+		width: 112px;
+		height: 224px;
+		justify-content: center;
+		align-items: center;
+	}
+	.car-img {
+		width: 110px;
+		height: 220px;
+	}
+	.mask-door-fl {
+		position: absolute;
+		left: 0;
+		top: 48px;
+		width: 12px;
+		height: 56px;
+		background-color: rgba(239, 68, 68, 0.4);
+		border-radius: 4px;
+	}
+	.mask-trunk {
+		position: absolute;
+		bottom: 12px;
+		left: 20px;
+		right: 20px;
+		height: 18px;
+		background-color: rgba(239, 68, 68, 0.4);
+		border-radius: 4px;
+	}
+	.mask-win {
+		position: absolute;
+		top: 68px;
+		left: 24px;
+		right: 24px;
+		height: 68px;
+		background-color: rgba(239, 68, 68, 0.25);
+		border-radius: 4px;
+	}
+
+	/* 四角胎压定位 */
+	.tire-anchor {
+		position: absolute;
+		flex-direction: row;
+		align-items: center;
+		z-index: 10;
+	}
+	.tire-fl {
+		left: 6px;
+		top: 30px;
+	}
+	.tire-fr {
+		right: 6px;
+		top: 30px;
+	}
+	.tire-rl {
+		left: 6px;
+		bottom: 30px;
+	}
+	.tire-rr {
+		right: 6px;
+		bottom: 30px;
+	}
+
+	.tire-readout {
+		flex-direction: column;
+	}
+	.tire-align-right {
+		align-items: flex-end;
+		margin-right: 4px;
+	}
+	.tire-align-left {
+		align-items: flex-start;
+		margin-left: 4px;
+	}
+	.tire-bar-row {
+		flex-direction: row;
+		align-items: baseline;
+	}
+	.tire-val {
+		font-size: 15px;
+		font-weight: 800;
+	}
+	.tire-ok {
+		color: #059669;
+	}
+	.tire-bad {
+		color: #DC2626;
+	}
+	.tire-unit {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+		margin-left: 2px;
+	}
+	.tire-line-divider {
+		width: 100%;
+		height: 1px;
+		background-color: var(--border-color, rgba(15, 23, 42, 0.1));
+		margin: 2px 0;
+	}
+	.tire-temp {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	/* 对角折线引线 Leader Lines */
+	.leader-fl {
+		flex-direction: row;
+		align-items: center;
+		height: 24px;
+	}
+	.leader-fr {
+		flex-direction: row;
+		align-items: center;
+		height: 24px;
+	}
+	.leader-rl {
+		flex-direction: row;
+		align-items: center;
+		height: 24px;
+	}
+	.leader-rr {
+		flex-direction: row;
+		align-items: center;
+		height: 24px;
+	}
+	.leader-h {
+		width: 16px;
+		height: 1.5px;
+	}
+	.leader-diag-fl {
+		width: 12px;
+		height: 1.5px;
+		transform: rotate(35deg);
+		transform-origin: left center;
+		margin-left: -1px;
+	}
+	.leader-diag-fr {
+		width: 12px;
+		height: 1.5px;
+		transform: rotate(-35deg);
+		transform-origin: right center;
+		margin-right: -1px;
+	}
+	.leader-diag-rl {
+		width: 12px;
+		height: 1.5px;
+		transform: rotate(-35deg);
+		transform-origin: left center;
+		margin-left: -1px;
+	}
+	.leader-diag-rr {
+		width: 12px;
+		height: 1.5px;
+		transform: rotate(35deg);
+		transform-origin: right center;
+		margin-right: -1px;
+	}
+	.line-ok {
+		background-color: rgba(16, 185, 129, 0.6);
+	}
+	.line-bad {
+		background-color: #DC2626;
+	}
+	.leader-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 2.5px;
+	}
+	.dot-ok {
+		background-color: #059669;
+	}
+	.dot-bad {
+		background-color: #DC2626;
+	}
+
+	.status-bot-bar {
+		align-items: center;
+		justify-content: center;
+		padding-top: 4px;
+	}
+	.normal-status-txt {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	/* 双能量仪表卡片 */
+	.gauge-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	.gauge-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+		letter-spacing: 0.5px;
+	}
+	.gauge-meta-row {
+		flex-direction: row;
+		align-items: center;
+	}
+	.meta-item {
+		font-size: 12px;
+		color: var(--text-sub, #64748B);
+	}
+	.meta-em {
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.meta-sep {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin: 0 6px;
+	}
+
+	.gauge-grid {
+		flex-direction: row;
+		gap: 12px;
+	}
+	.energy-tile {
+		flex: 1;
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border-radius: 14px;
+		padding: 12px;
+	}
+	.tile-top {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.tile-name {
+		font-size: 12px;
+		color: var(--text-sub, #64748B);
+	}
+	.tile-pct {
+		font-size: 12px;
+		font-weight: 700;
+	}
+	.elec-color {
+		color: #059669;
+	}
+	.oil-color {
+		color: #D97706;
+	}
+	.tile-num-row {
+		flex-direction: row;
+		align-items: baseline;
+		margin: 6px 0;
+	}
+	.tile-big {
+		font-size: 26px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.tile-unit {
+		font-size: 12px;
+		color: var(--text-muted, #94A3B8);
+		margin-left: 3px;
+	}
+	.track-bg {
+		width: 100%;
+		height: 8px;
+		background-color: rgba(15, 23, 42, 0.08);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+	.track-fill {
+		height: 8px;
+		border-radius: 4px;
+	}
+	.elec-bg {
+		background-color: #10B981;
+	}
+	.oil-bg {
+		background-color: #F59E0B;
+	}
+
+	/* 三电与健康卡片 */
+	.b-head {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	.b-title {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+		letter-spacing: 0.5px;
+	}
+	.b-badge {
+		font-size: 11px;
+		font-weight: 600;
+		padding: 2px 8px;
+		border-radius: 10px;
+	}
+	.b-badge-good {
+		color: #059669;
+		background-color: rgba(16, 185, 129, 0.12);
+	}
+	.b-badge-warn {
+		color: #DC2626;
+		background-color: rgba(239, 68, 68, 0.12);
+	}
+
+	.b-grid {
+		flex-direction: row;
+		gap: 10px;
+		margin-bottom: 10px;
+	}
+	.b-card {
+		flex: 1;
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border-radius: 12px;
+		padding: 10px 12px;
+	}
+	.b-card-good {
+		border-left: 4px solid #10B981;
+	}
+	.b-card-warn {
+		border-left: 4px solid #DC2626;
+		background-color: rgba(239, 68, 68, 0.05);
+	}
+	.b-k {
+		font-size: 11px;
+		color: var(--text-sub, #64748B);
+	}
+	.b-val-row {
+		flex-direction: row;
+		align-items: baseline;
+		margin: 4px 0 2px 0;
+	}
+	.b-val {
+		font-size: 18px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+	}
+	.b-unit {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin-left: 3px;
+	}
+	.b-hint {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.good-color {
+		color: #059669;
+	}
+	.warn-color {
+		color: #DC2626;
+	}
+
+	.b-sub-box {
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border-radius: 12px;
+		padding: 10px 12px;
+		margin-bottom: 10px;
+	}
+	.b-sub-line {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+	.b-sub-k {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-main, #0F172A);
+	}
+	.b-sub-v {
+		font-size: 13px;
+		font-weight: 700;
+		color: #059669;
+	}
+	.b-sub-p {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		line-height: 16px;
+	}
+
+	.readonly-pill {
+		flex-direction: row;
+		align-items: center;
+		background-color: rgba(15, 23, 42, 0.04);
+		border-radius: 10px;
+		padding: 8px 10px;
+	}
+	.shield-icon {
+		font-size: 12px;
+		margin-right: 6px;
+	}
+	.readonly-desc {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+		flex: 1;
+		line-height: 14px;
+	}
+</style>

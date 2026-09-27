@@ -14,7 +14,12 @@ type Config struct {
 	AdminDir       string
 	OwnerDir       string
 	NetaAppKey     string
+	NetaAppSecret  string
 }
+
+// DefaultCronSync keeps enough timestamped snapshots to reconstruct short
+// charging and refuelling sessions without requiring the owner to be present.
+const DefaultCronSync = "15m"
 
 func Load() Config {
 	_ = loadDotEnv(".env")
@@ -27,10 +32,11 @@ func Load() Config {
 		AdminPassword:  os.Getenv("FENGHUOLUN_ADMIN_BOOTSTRAP_PASSWORD"),
 		CORSOrigins:    getenv("FENGHUOLUN_CORS_ORIGINS", ""),
 		ScaleCandidate: scale == "candidate",
-		CronSync:       os.Getenv("FENGHUOLUN_CRON_SYNC"),
+		CronSync:       getenv("FENGHUOLUN_CRON_SYNC", DefaultCronSync),
 		AdminDir:       os.Getenv("FENGHUOLUN_ADMIN_DIR"),
 		OwnerDir:       os.Getenv("FENGHUOLUN_OWNER_DIR"),
 		NetaAppKey:     os.Getenv("FENGHUOLUN_NETA_APP_KEY"),
+		NetaAppSecret:  os.Getenv("FENGHUOLUN_NETA_APP_SECRET"),
 	}
 }
 

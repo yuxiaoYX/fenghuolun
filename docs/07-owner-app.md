@@ -49,7 +49,7 @@
 - **短信验证码**：服务端使用当前风火轮账号手机号发码，再调用官方验证码登录换 `refresh_token`
 - **手填 refresh_token**：不调用官方登录，只走换票
 - 成功：进入「车况」
-- `sign_required` 显示官方原文（当前是验签信息缺失，签名算法仍未验证）
+- `sign_required` 显示官方原文（未配置 `FENGHUOLUN_NETA_APP_SECRET`，或网关仍验签失败；拼串见 V2 / 09，HAR #58 已绿）
 - `token_invalid` → 「请重新填写 refresh_token」
 - 后端必须设置 `FENGHUOLUN_TOKEN_KEK`
 - 本地只存本服务会话，不存官方 token，不存短信验证码和密码；「退出登录」只撤销本服务会话，「解除官方绑定」才删除官方凭证

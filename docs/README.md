@@ -22,11 +22,11 @@
 | [10-security.md](10-security.md) | 凭证、HAR、开源边界 |
 | [11-conventions.md](11-conventions.md) | 编码与文档约定 |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker Compose / docker run / 1Panel / 备份升级 |
-| `HAR-ANALYSIS.md`（本机，已 gitignore） | 本地 `1.har` 的抓包证据附录，**不进仓库** |
+| `HAR-ANALYSIS.md`（本机，已 gitignore） | 本地 `1.har` + IPA 6.4.5 证据附录，**不进仓库** |
 
 **已作废（不要再当需求来源）：**
 
 - [obsolete/API.md](obsolete/API.md) — 旧 Vite 原型合同
 - [obsolete/design.md](obsolete/design.md) — 旧一期配色草稿
 
-产品决策以 `02-decisions.md` 为准。协议事实以 `09-protocol-neta.md` 为准；更细抓包条目见本机 `HAR-ANALYSIS.md`（不进仓库）。二者冲突时：**决策文件赢产品范围，HAR 赢官方字段与路径。**
+产品决策以 `02-decisions.md` 为准。协议事实以 `09-protocol-neta.md` 为准；更细 HAR/IPA 条目见本机 `HAR-ANALYSIS.md`（不进仓库）。冲突时：**决策文件赢产品范围；HAR 已成功响应赢官方字段与方法；IPA 字符串只作静态线索，不覆盖已证实条目。**

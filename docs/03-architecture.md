@@ -65,7 +65,7 @@ fenghuolun/
 
 绑定二选一：
 
-1. 短信：服务端 `POST sendCodeAndSignCheck`，再 `POST registerOrLoginUncheck`，从 `data.token` 取出令牌。验证码不落库。请求头保持官方原始大小写，不编造 `sign`
+1. 短信：服务端 `POST sendCodeAndSignCheck`，再 `POST registerOrLoginUncheck`，从 `data.token` 取出令牌。验证码不落库。请求头保持官方原始大小写，`sign` 由运行时密钥按官方 SHA-256 规则计算
 2. 手填 `refresh_token`：不调用官方登录
 
 令牌绑定：

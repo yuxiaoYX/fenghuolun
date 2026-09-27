@@ -6,7 +6,7 @@
 	const themeClass = ref(themeClassOf())
 	const padStyle = ref('')
 	const wrapStyle = ref('')
-	const mode = ref('sms')
+	const mode = ref('token')
 	const phone = ref('')
 	const password = ref('')
 	const code = ref('')
@@ -72,33 +72,13 @@
 	}
 
 	const sendCode = async () => {
-		err.value = ''
-		if (phone.value.trim() == '') {
-			err.value = '请先输入手机号'
-			return
-		}
-		if (left.value > 0 || busy.value == true) {
-			return
-		}
+		if (left.value > 0 || busy.value == true) return
 		busy.value = true
-		const res = await ownerRequest('POST', '/api/v1/owner/sms/send', {
-			phone: '' + phone.value.trim()
-		})
+		const res = await ownerRequest('POST', '/api/v1/owner/sms/send', { phone: '' + phone.value.trim() })
 		busy.value = false
-		if (res == null) {
-			await offline()
-			return
-		}
-		if (envelopeOk(res) == true) {
-			left.value = 60
-			tick()
-			uni.showToast({
-				title: '验证码已发送',
-				icon: 'none'
-			})
-			return
-		}
-		showErr(res, '验证码没发出去，请核对手机号')
+		if (res == null) { await offline(); return }
+		if (envelopeOk(res) == true) { left.value = 60; tick(); uni.showToast({ title: '验证码已发送', icon: 'none' }); return }
+		showErr(res, '验证码没发出去，请稍后重试')
 	}
 
 	const finish = async (res) => {
@@ -145,16 +125,8 @@
 			await finish(res)
 			return
 		}
-		if (code.value.trim() == '') {
-			busy.value = false
-			err.value = '请输入收到的短信验证码'
-			return
-		}
-		const res = await ownerRequest('POST', '/api/v1/owner/register', {
-			phone: '' + phone.value.trim(),
-			password: password.value,
-			code: '' + code.value.trim()
-		})
+		if (code.value.trim() == '') { busy.value = false; err.value = '请输入收到的短信验证码'; return }
+		const res = await ownerRequest('POST', '/api/v1/owner/register', { phone: '' + phone.value.trim(), password: password.value, code: '' + code.value.trim() })
 		await finish(res)
 	}
 
@@ -187,10 +159,10 @@
 			<!-- 模式分段选择器 -->
 			<view class="mode-seg-wrap">
 				<view class="mode-seg-pill" :class="mode == 'sms' ? 'mode-seg-active' : ''" @click="useSMS">
-					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码（推荐）</text>
+					<text class="mode-seg-txt" :class="mode == 'sms' ? 'mode-seg-active-txt' : ''">短信验证码</text>
 				</view>
 				<view class="mode-seg-pill" :class="mode == 'token' ? 'mode-seg-active' : ''" @click="useToken">
-					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（进阶）</text>
+					<text class="mode-seg-txt" :class="mode == 'token' ? 'mode-seg-active-txt' : ''">手填 Token（推荐）</text>
 				</view>
 			</view>
 

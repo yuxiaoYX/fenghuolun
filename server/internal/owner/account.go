@@ -72,17 +72,12 @@ func (s *Service) SendLoginCode(phone string) error {
 	if !phonePattern.MatchString(phone) {
 		return coded.New(http.StatusBadRequest, "invalid_request", "请填写 11 位手机号")
 	}
-	if s.limits.count(phone+"#gap", time.Minute) >= 1 {
-		return coded.New(http.StatusBadRequest, "invalid_request", "请稍后再获取验证码")
+	if !s.limits.try(phone+"#sms", time.Minute, 1) {
+		return coded.New(http.StatusBadRequest, "invalid_request", "验证码发送太频繁，请稍后再试")
 	}
-	if s.limits.count(phone+"#send", time.Hour) >= 5 {
-		return coded.New(http.StatusBadRequest, "invalid_request", "获取次数过多，请稍后再试")
-	}
-	s.limits.add(phone + "#send")
 	if err := s.Client.SendLoginCode(phone); err != nil {
 		return mapLoginUpstream(err)
 	}
-	s.limits.add(phone + "#gap")
 	return nil
 }
 
@@ -271,14 +266,18 @@ func (s *Service) BindToken(session, refreshToken string) (*store.Binding, error
 	if accountID == "" {
 		return s.Bind(refreshToken)
 	}
-	b, err := s.Bind(refreshToken)
+	if len(refreshToken) < 8 {
+		return nil, coded.New(http.StatusBadRequest, "invalid_request", "refresh_token 太短")
+	}
+	pair, err := s.Client.Refresh(refreshToken)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.attachAccount(accountID, b); err != nil {
+	live, err := s.pullLive(pair)
+	if err != nil {
 		return nil, err
 	}
-	return b, nil
+	return s.storeOfficial(pair, accountID, "", live)
 }
 
 func (s *Service) adoptOfficial(pair neta.TokenPair, accountID string) (*store.Binding, error) {
@@ -352,7 +351,7 @@ func mapLoginUpstream(err error) error {
 	case errors.Is(err, neta.ErrSMSRejected), errors.Is(err, neta.ErrTokenInvalid):
 		return coded.New(http.StatusUnauthorized, "sms_invalid", "验证码不正确或已失效")
 	case errors.Is(err, neta.ErrSignRequired):
-		return coded.New(http.StatusBadGateway, "sign_required", "官方登录要求签名，算法尚未验证。请改用手填 refresh_token")
+		return coded.New(http.StatusBadGateway, "sign_required", "官方接口要求配置签名密钥，请联系管理员")
 	default:
 		return err
 	}

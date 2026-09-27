@@ -181,6 +181,20 @@ func TestDecodeEnergy(t *testing.T) {
 	}
 }
 
+func TestDecodeEnergySortsDaysForTrend(t *testing.T) {
+	raw := []byte(`{"code":20000,"data":[
+		{"countTime":"2026-09-08","totalConsumesEnergy":8},
+		{"countTime":"2026-09-02","totalConsumesEnergy":2}
+	]}`)
+	stat, err := DecodeEnergyDays(raw, 1, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stat.Days) != 2 || stat.Days[0].CountTime != "2026-09-02" || stat.Days[1].CountTime != "2026-09-08" {
+		t.Fatalf("days are not chronological: %+v", stat.Days)
+	}
+}
+
 func TestSnapshotJSONChinaWallClock(t *testing.T) {
 	var snap Snapshot
 	if err := json.Unmarshal([]byte(`{"fetchedAt":"2026-01-15T04:00:00Z"}`), &snap); err != nil {

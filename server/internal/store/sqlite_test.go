@@ -270,13 +270,13 @@ func TestSQLiteFillDetectAndPay(t *testing.T) {
 	yes := true
 	b := sampleBinding()
 	b.Snapshots = []neta.Snapshot{
-		{FetchedAt: clock.Of(time.Unix(1, 0).UTC()), Power: neta.Power{SocPct: ptrf(40), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
+		{FetchedAt: clock.Of(time.Unix(1, 0).UTC()), OdometerKm: ptrf(12000), Power: neta.Power{SocPct: ptrf(40), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
 	}
 	if err := s.Put(b); err != nil {
 		t.Fatal(err)
 	}
 	b.Snapshots = []neta.Snapshot{
-		{FetchedAt: clock.Of(time.Unix(2, 0).UTC()), Power: neta.Power{SocPct: ptrf(80), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
+		{FetchedAt: clock.Of(time.Unix(2, 0).UTC()), OdometerKm: ptrf(12010), Power: neta.Power{SocPct: ptrf(80), PluggedIn: &yes}, Extender: &neta.Extender{FuelPct: ptrf(20)}},
 	}
 	if err := s.Put(b); err != nil {
 		t.Fatal(err)
@@ -291,11 +291,55 @@ func TestSQLiteFillDetectAndPay(t *testing.T) {
 	paid := 40.0
 	kwh := 32.0
 	saved, err := s.SaveFill(b.ID, neta.Fill{ID: items[0].ID, Kind: neta.FillCharge, PaidCny: &paid, EnergyKwh: &kwh, SocStart: items[0].SocStart, SocEnd: items[0].SocEnd})
-	if err != nil || saved.Status != neta.FillRecorded || saved.UnitCny == nil {
+	if err != nil || saved.Status != neta.FillRecorded || saved.UnitCny == nil || saved.Source != neta.FillAuto {
 		t.Fatalf("%+v %v", saved, err)
+	}
+	if saved.StartedAt.Unix() != 1 || saved.FinishedAt.Unix() != 2 || saved.OdoStart == nil || *saved.OdoStart != 12000 {
+		t.Fatalf("auto fill times must survive receipt edit: %+v", saved)
+	}
+	if saved.OdoEnd == nil || *saved.OdoEnd != 12010 {
+		t.Fatalf("auto fill end mileage must survive receipt edit: %+v", saved)
 	}
 	if _, err := s.SaveFill(b.ID, neta.Fill{Kind: neta.FillRefuel, PaidCny: ptrf(200), Liters: ptrf(30)}); err != nil {
 		t.Fatal(err)
+	}
+	updated, err := s.SaveFill(b.ID, neta.Fill{ID: saved.ID, Kind: neta.FillCharge, SocStart: saved.SocStart, SocEnd: saved.SocEnd})
+	if err != nil || updated.Status != neta.FillRecorded || updated.PaidCny == nil {
+		t.Fatalf("partial edit must preserve recorded payment: %+v %v", updated, err)
+	}
+}
+
+func TestSQLiteDeleteAutoFillSuppressesRegeneration(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "t.db")
+	s, err := OpenSQLite(p, "test-kek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	yes := true
+	b := sampleBinding()
+	for _, snap := range []neta.Snapshot{
+		{FetchedAt: clock.Of(time.Unix(1, 0).UTC()), Power: neta.Power{SocPct: ptrf(40), PluggedIn: &yes}},
+		{FetchedAt: clock.Of(time.Unix(2, 0).UTC()), Power: neta.Power{SocPct: ptrf(80), PluggedIn: &yes}},
+	} {
+		b.Snapshots = []neta.Snapshot{snap}
+		if err := s.Put(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := s.ListFills(b.ID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("fills %+v %v", items, err)
+	}
+	if err := s.DeleteFill(b.ID, items[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	items, err = s.ListFills(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("ignored automatic fill regenerated: %+v", items)
 	}
 }
 

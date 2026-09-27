@@ -14,7 +14,8 @@
 - 管理员：antdv-next 运维台（总览 / 绑定 / 详情 / 任务 / 数据 / 设置 / 账号）。`sync_job` 追加历史（`manual|cron|admin`，含 `running`）。运行时设置在 `app_settings`，环境变量作空库缺省并热替换 gcron。部署可把 `apps/admin/dist` 交给 `FENGHUOLUN_ADMIN_DIR` 由 Go 托管
 - KEK / SQLite 路径 / 监听地址仍只在 `.env`
 - 快照 `stale` 阈值读 `app_settings.stale_after_sec`（默认 7200 秒），不是写死 2 小时
-- 不要跳去车控，不要编造 sign 算法
+- 不要跳去车控。`sign` 拼串已从 IPA 取出（V2），密钥只走环境变量；HAR 向量未绿时缺密钥仍返回 `sign_required`
+- 协议附录本机 `HAR-ANALYSIS.md` 已含 IPA 6.4.5 静态路径（多车 / 健康 Record / rvc* / PKI / 充电主机），未探活前不要当已接通
 - 胎压/胎温/内外温/里程/综合续航已对照官方 App「车辆详情」
 - 门/锁/窗关闭侧已对照（0 / 16）；开侧未见，充电仍 unknown
 
@@ -32,7 +33,7 @@
 - 车主只用 uni-app x **蒸汽模式**前台（`manifest.json` → `uni-app-x.vapor: true`，不是 Steam 皮肤）
 - 管理员只用 Vue3 Web + antdv-next 1.5.x；不要 Naive / Element / gf-vue-admin / `antdv init`
 - Go **GoFrame v2** 后端；SQLite；浏览器不直连官方
-- 车主可手机号 + 本服务密码 + 官方短信验证码注册并换 `refresh_token`；也可只贴 `refresh_token`。不编造 sign
+- 车主可手机号 + 本服务密码 + 官方短信验证码注册并换 `refresh_token`；也可只贴 `refresh_token`。短信 sign 由服务端使用运行时密钥计算
 - 本服务仍要车主会话 + 管理员会话 + 车辆归属校验
 - 不做 OTA、不做数字钥匙、未有闭环前不做车控
 - 未知值保持未知；`fetchedAt` ≠ `reportedAt`；对外时间是北京时间墙钟（D22），前台不换算；能耗独立建模；位置仅存最新一个点（D17 修订，不存轨迹）
@@ -56,4 +57,4 @@
 2. 对照官方 App：V3 电流、V4 开侧、V8 油箱
 3. 可选：车主导出 JSON。插枪/充电枚举对照后，充电草稿才能自动出
 
-仍禁止车控、数字钥匙、编造 sign。
+仍禁止车控、数字钥匙。`sign` 密钥不进仓库。

@@ -219,6 +219,8 @@ func (s *SQLite) migrate() error {
 		`ALTER TABLE admin_session ADD COLUMN updated_at INTEGER`,
 		`ALTER TABLE admin_session ADD COLUMN deleted_at INTEGER DEFAULT 0`,
 		`ALTER TABLE admin_session ADD COLUMN username TEXT NOT NULL DEFAULT ''`,
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_binding_fetched ON snapshot(binding_id, fetched_at, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_fill_event_binding_finished ON fill_event(binding_id, finished_at, id)`,
 	} {
 		_, _ = s.db.Exec(ctx, stmt)
 	}
@@ -464,6 +466,25 @@ func (s *SQLite) GetByIDAny(id string) *Binding {
 	return s.loadBinding(id, "", true)
 }
 
+// FindBindingByVIN reuses a historical vehicle row after an account unbinds.
+// The VIN is decrypted only for the comparison and is never returned here.
+func (s *SQLite) FindBindingByVIN(vin string) *Binding {
+	if vin == "" {
+		return nil
+	}
+	var rows []entity.Binding
+	if err := s.db.Model("binding").Ctx(s.ctx()).Where("disabled", 0).Scan(&rows); err != nil {
+		return nil
+	}
+	for _, row := range rows {
+		stored, err := crypto.Open(s.kek, row.VinCipher)
+		if err == nil && stored == vin {
+			return s.loadBinding(row.Id, "", true)
+		}
+	}
+	return nil
+}
+
 func (s *SQLite) SetNickname(id, nick string) error {
 	if id == "" {
 		return fmt.Errorf("invalid_request: missing binding id")
@@ -479,6 +500,7 @@ type SnapshotSummary struct {
 	FetchedAt    clock.Instant  `json:"fetchedAt"`
 	ReportedAt   *clock.Instant `json:"reportedAt"`
 	SocPct       *float64       `json:"socPct"`
+	FuelPct      *float64       `json:"fuelPct"`
 	EvRangeKm    *float64       `json:"evRangeKm"`
 	TotalRangeKm *float64       `json:"totalRangeKm"`
 	OdometerKm   *float64       `json:"odometerKm"`
@@ -510,11 +532,16 @@ func (s *SQLite) ListSnapshotSummaries(bindingID string, page, pageSize int) ([]
 	for _, row := range rows {
 		var snap neta.Snapshot
 		_ = json.Unmarshal([]byte(row.Payload), &snap)
+		var fuelPct *float64
+		if snap.Extender != nil {
+			fuelPct = snap.Extender.FuelPct
+		}
 		item := SnapshotSummary{
 			ID:           fmt.Sprintf("%d", row.Id),
 			FetchedAt:    snap.FetchedAt,
 			ReportedAt:   snap.ReportedAt,
 			SocPct:       snap.Power.SocPct,
+			FuelPct:      fuelPct,
 			EvRangeKm:    snap.Power.EvRangeKm,
 			TotalRangeKm: snap.Power.TotalRangeKm,
 			OdometerKm:   snap.OdometerKm,

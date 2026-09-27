@@ -3,6 +3,7 @@ package neta
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"fenghuolun/internal/clock"
@@ -333,6 +334,9 @@ func DecodeEnergyDays(raw []byte, periodType int, fetchedAt time.Time) (EnergySt
 			hasSum = true
 		}
 	}
+	sort.SliceStable(stat.Days, func(i, j int) bool {
+		return stat.Days[i].CountTime < stat.Days[j].CountTime
+	})
 	if hasSum {
 		stat.TotalKwh = &sum
 	}

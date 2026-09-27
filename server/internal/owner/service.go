@@ -32,6 +32,7 @@ type Service struct {
 func New(cfg config.Config, st *store.SQLite) *Service {
 	client := neta.NewClient()
 	client.AppKey = cfg.NetaAppKey
+	client.AppSecret = cfg.NetaAppSecret
 	return &Service{
 		Cfg:    cfg,
 		Store:  st,
@@ -251,6 +252,11 @@ func (s *Service) storeOfficial(pair neta.TokenPair, accountID, preferredID stri
 	} else if accountID != "" {
 		if acc, err := s.Store.AccountByID(accountID); err == nil && acc != nil && acc.BindingId != "" {
 			if cur := s.Store.GetByIDAny(acc.BindingId); cur != nil && !cur.Disabled {
+				b.ID = cur.ID
+			}
+		}
+		if b.ID == "" {
+			if cur := s.Store.FindBindingByVIN(b.Meta.VIN); cur != nil && !cur.Disabled {
 				b.ID = cur.ID
 			}
 		}

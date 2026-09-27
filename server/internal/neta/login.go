@@ -2,11 +2,14 @@ package neta
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,13 +19,13 @@ const (
 	PathSendCode = "/pivot/account/2.0/sendCodeAndSignCheck"
 	PathSMSLogin = "/pivot/account/2.0/accountSafe/registerOrLoginUncheck"
 
-	// HAR 里一次成功登录带的静态客户端标识。不是签名。
-	// sign / appKey / Cookie 每次不同，算法未验证，这里不发送、也不编造。
+	// HAR 里一次成功登录带的静态客户端标识。appKey / APP_SECRET 只走运行时注入。
 	accountAppID      = "HOZON-B-xKrgEvMt"
 	accountAppVersion = "6.4.5"
 	accountChannel    = "iOS"
 	accountLoginCh    = "1"
 	accountDeviceType = "1"
+	accountPhoneModel = "iPhone X (CDMA)"
 )
 
 type smsLoginBody struct {
@@ -134,12 +137,20 @@ func businessFailure(env Envelope) error {
 }
 
 func (c *Client) postAccountForm(rawURL string, form url.Values) ([]byte, error) {
+	params := make(map[string]string, len(form))
+	for k, values := range form {
+		if len(values) > 0 {
+			params[k] = values[0]
+		}
+	}
 	req, err := http.NewRequest(http.MethodPost, rawURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
-	c.accountHeaders(req)
+	if err := c.accountHeaders(req, params, nil); err != nil {
+		return nil, err
+	}
 	return c.do(req)
 }
 
@@ -149,23 +160,117 @@ func (c *Client) postAccountJSON(rawURL string, body []byte) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json;charset=utf-8")
-	c.accountHeaders(req)
+	if err := c.accountHeaders(req, nil, body); err != nil {
+		return nil, err
+	}
 	return c.do(req)
 }
 
-func (c *Client) accountHeaders(req *http.Request) {
+func (c *Client) accountHeaders(req *http.Request, form map[string]string, jsonBody []byte) error {
+	appKey := strings.TrimSpace(c.AppKey)
+	if appKey == "" || strings.TrimSpace(c.AppSecret) == "" {
+		return ErrSignRequired
+	}
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	nonce := newNonce()
+	headers := map[string]string{
+		"appId":     accountAppID,
+		"appKey":    appKey,
+		"nonce":     nonce,
+		"timestamp": timestamp,
+	}
+	params := rawQueryMap(req.URL)
+	for k, v := range form {
+		params[k] = v
+	}
+	sign := signRequest(req.Method, req.URL.Path, headers, params, jsonBody, c.AppSecret)
 	// net/http 的 Header.Set 会把 appId 收成 Appid。官方网关按原始头名判断验签，对不上就回「验签信息缺失」。
-	setRaw(req.Header, "Accept", "application/json")
+	setRaw(req.Header, "Accept", "*/*")
 	setRaw(req.Header, "appId", accountAppID)
 	setRaw(req.Header, "appVersion", accountAppVersion)
 	setRaw(req.Header, "channel", accountChannel)
 	setRaw(req.Header, "login_channel", accountLoginCh)
-	setRaw(req.Header, "timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	setRaw(req.Header, "nonce", newNonce())
-	if c.AppKey != "" {
-		setRaw(req.Header, "appKey", c.AppKey)
+	setRaw(req.Header, "timestamp", timestamp)
+	setRaw(req.Header, "nonce", nonce)
+	setRaw(req.Header, "sign", sign)
+	setRaw(req.Header, "phoneModel", accountPhoneModel)
+	setRaw(req.Header, "appKey", appKey)
+	setRaw(req.Header, "User-Agent", "CHZ/6.4.5 (com.hozon.sales.app; build:4; iOS 16.7.11) Alamofire/5.4.4")
+	return nil
+}
+
+// signRequest 对齐 IPA HZRequestInterceptor（CryptoSwift SHA2.sha256 + toHexString）。
+// HAR #58 sendCode 已绿：METHOD+PATH+appid:…appkey:…nonce:…timestamp:…+k:v 表单 + SECRET，
+// 再按 urlQueryAllowed 去掉 ":#[]@?/!$&'()+,;=~" 做百分号编码。
+func signRequest(method, path string, headers, params map[string]string, jsonBody []byte, secret string) string {
+	extra := colonJoin(params)
+	if len(jsonBody) > 0 {
+		extra += "json:" + string(jsonBody)
 	}
-	setRaw(req.Header, "User-Agent", "fenghuolun")
+	raw := strings.ToUpper(method) + path + colonJoin(headers) + extra + secret
+	raw = strings.ReplaceAll(strings.ReplaceAll(raw, " ", ""), "\n", "")
+	enc := strings.ReplaceAll(percentEncodeSign(raw), "%20", "")
+	sum := sha256.Sum256([]byte(enc))
+	return hex.EncodeToString(sum[:])
+}
+
+func colonJoin(m map[string]string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(m))
+	for k, v := range m {
+		if strings.EqualFold(k, "sign") || v == "" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return strings.ToLower(keys[i]) < strings.ToLower(keys[j])
+	})
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(strings.ToLower(k))
+		b.WriteByte(':')
+		b.WriteString(m[k])
+	}
+	return b.String()
+}
+
+func percentEncodeSign(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '*' {
+			b.WriteByte(c)
+		} else {
+			b.WriteByte('%')
+			b.WriteString(strings.ToUpper(hex.EncodeToString([]byte{c})))
+		}
+	}
+	return b.String()
+}
+
+func rawQueryMap(u *url.URL) map[string]string {
+	out := map[string]string{}
+	if u == nil || u.RawQuery == "" {
+		return out
+	}
+	for _, part := range strings.Split(u.RawQuery, "&") {
+		if part == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(part, "=")
+		if k == "" {
+			continue
+		}
+		if !ok {
+			v = ""
+		}
+		out[k] = v
+	}
+	return out
 }
 
 func setRaw(h http.Header, key, value string) {

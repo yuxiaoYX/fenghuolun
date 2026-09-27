@@ -3,6 +3,7 @@ package neta
 import (
 	"math"
 	"sort"
+	"time"
 
 	"fenghuolun/internal/clock"
 )
@@ -12,48 +13,49 @@ func round2(v float64) float64 {
 }
 
 const (
-	FillCharge = "charge"
-	FillRefuel = "refuel"
-	FillAuto   = "auto"
-	FillManual = "manual"
-	FillDraft  = "draft"
+	FillCharge   = "charge"
+	FillRefuel   = "refuel"
+	FillAuto     = "auto"
+	FillManual   = "manual"
+	FillDraft    = "draft"
 	FillRecorded = "recorded"
 )
 
 const (
-	chargeSocMin  = 2.0
+	chargeSocMin   = 2.0
 	capacitySocMin = 5.0
-	refuelPctMin  = 0.5
+	refuelPctMin   = 0.5
+	maxFillGap     = 45 * time.Minute
 )
 
 type Fill struct {
-	ID         string         `json:"id"`
-	Kind       string         `json:"kind"`
-	Source     string         `json:"source"`
-	Status     string         `json:"status"`
-	StartedAt  clock.Instant  `json:"startedAt"`
-	FinishedAt clock.Instant  `json:"finishedAt"`
+	ID          string        `json:"id"`
+	Kind        string        `json:"kind"`
+	Source      string        `json:"source"`
+	Status      string        `json:"status"`
+	StartedAt   clock.Instant `json:"startedAt"`
+	FinishedAt  clock.Instant `json:"finishedAt"`
 	FromFetched clock.Instant `json:"fromFetched"`
 	ToFetched   clock.Instant `json:"toFetched"`
-	OdoStart   *float64       `json:"odoStart"`
-	OdoEnd     *float64       `json:"odoEnd"`
-	SocStart   *float64       `json:"socStart"`
-	SocEnd     *float64       `json:"socEnd"`
-	FuelStart  *float64       `json:"fuelStart"`
-	FuelEnd    *float64       `json:"fuelEnd"`
-	EnergyKwh  *float64       `json:"energyKwh"`
-	Liters     *float64       `json:"liters"`
-	PaidCny    *float64       `json:"paidCny"`
-	UnitCny    *float64       `json:"unitCny"`
-	Note       string         `json:"note"`
+	OdoStart    *float64      `json:"odoStart"`
+	OdoEnd      *float64      `json:"odoEnd"`
+	SocStart    *float64      `json:"socStart"`
+	SocEnd      *float64      `json:"socEnd"`
+	FuelStart   *float64      `json:"fuelStart"`
+	FuelEnd     *float64      `json:"fuelEnd"`
+	EnergyKwh   *float64      `json:"energyKwh"`
+	Liters      *float64      `json:"liters"`
+	PaidCny     *float64      `json:"paidCny"`
+	UnitCny     *float64      `json:"unitCny"`
+	Note        string        `json:"note"`
 }
 
 type FillSpend struct {
-	ChargePaidCny    *float64 `json:"chargePaidCny"`
-	RefuelPaidCny    *float64 `json:"refuelPaidCny"`
-	ElecCnyPerKwh    *float64 `json:"elecCnyPerKwh"`
-	FuelCnyPerL      *float64 `json:"fuelCnyPerL"`
-	ElecUseCostCny   *float64 `json:"elecUseCostCny"`
+	ChargePaidCny  *float64 `json:"chargePaidCny"`
+	RefuelPaidCny  *float64 `json:"refuelPaidCny"`
+	ElecCnyPerKwh  *float64 `json:"elecCnyPerKwh"`
+	FuelCnyPerL    *float64 `json:"fuelCnyPerL"`
+	ElecUseCostCny *float64 `json:"elecUseCostCny"`
 }
 
 type PackCapacity struct {
@@ -74,7 +76,7 @@ func mergeSteps(snaps []Snapshot, step func(Snapshot, Snapshot) bool, kind strin
 	var cur *Fill
 	for i := 1; i < len(snaps); i++ {
 		prev, now := snaps[i-1], snaps[i]
-		if !step(prev, now) {
+		if !withinFillGap(prev, now) || !step(prev, now) {
 			if cur != nil {
 				out = append(out, *cur)
 				cur = nil
@@ -92,6 +94,14 @@ func mergeSteps(snaps []Snapshot, step func(Snapshot, Snapshot) bool, kind strin
 		out = append(out, *cur)
 	}
 	return out
+}
+
+func withinFillGap(prev, now Snapshot) bool {
+	a, b := prev.FetchedAt.Time(), now.FetchedAt.Time()
+	if a.IsZero() || b.IsZero() || b.Before(a) {
+		return false
+	}
+	return b.Sub(a) <= maxFillGap
 }
 
 func startFill(kind string, prev, now Snapshot) Fill {

@@ -290,7 +290,7 @@ func TestOwnerBindSnapshotEnergy(t *testing.T) {
 	}
 	defer hist.Close()
 	histBody := hist.ReadAllString()
-	if hist.StatusCode != http.StatusOK || !strings.Contains(histBody, `"total"`) {
+	if hist.StatusCode != http.StatusOK || !strings.Contains(histBody, `"total"`) || !strings.Contains(histBody, `"fuelPct":24`) {
 		t.Fatalf("snapshots %d %s", hist.StatusCode, histBody)
 	}
 	fill, err := cli.ContentJson().Post(context.Background(), prefix+"/api/v1/owner/fills", `{"kind":"charge","paidCny":48,"energyKwh":80,"socStart":10,"socEnd":90}`)
@@ -652,15 +652,7 @@ func TestOwnerPhoneRegisterAndLogin(t *testing.T) {
 	if sms.StatusCode != http.StatusOK || !strings.Contains(sms.ReadAllString(), `"sent":true`) {
 		t.Fatalf("sms %d %s", sms.StatusCode, sms.ReadAllString())
 	}
-	bad, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"000000"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bad.Close()
-	if bad.StatusCode != http.StatusUnauthorized || !strings.Contains(bad.ReadAllString(), "sms_invalid") {
-		t.Fatalf("bad code %d %s", bad.StatusCode, bad.ReadAllString())
-	}
-	reg, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"123456"}`)
+	reg, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","refresh_token":"first-refresh-token"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +702,7 @@ func TestOwnerPhoneRegisterAndLogin(t *testing.T) {
 	if rebind.StatusCode != http.StatusOK || !strings.Contains(rebind.ReadAllString(), `"bound":true`) {
 		t.Fatalf("rebind %d %s", rebind.StatusCode, rebind.ReadAllString())
 	}
-	dup, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","code":"123456"}`)
+	dup, err := g.Client().ContentJson().Post(context.Background(), prefix+"/api/v1/owner/register", `{"phone":"13800138000","password":"secret-pass-xx","refresh_token":"first-refresh-token"}`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,8 +49,12 @@ func (s *SQLite) SetSetting(key, value string) error {
 }
 
 func (s *SQLite) SeedSettings(cfg config.Config) error {
+	cronSync := strings.TrimSpace(cfg.CronSync)
+	if cronSync == "" {
+		cronSync = config.DefaultCronSync
+	}
 	defaults := map[string]string{
-		SettingCronSync:     strings.TrimSpace(cfg.CronSync),
+		SettingCronSync:     cronSync,
 		SettingCORS:         strings.TrimSpace(cfg.CORSOrigins),
 		SettingSnapshotKeep: "0",
 		SettingStaleAfter:   strconv.Itoa(DefaultStaleAfterSec),

@@ -1,0 +1,690 @@
+<script setup>
+	import { ref } from 'vue'
+	import FillModal from '../../components/fill-modal/fill-modal.uvue'
+	import {
+		ownerRequest,
+		sessionOf,
+		bounceIfAuthFailed,
+		envelopeOk,
+		envelopeData,
+		themeClassOf,
+		padBoxStyle,
+		pageWrapStyle,
+		applyThemeChrome
+	} from '../../common/api.uts'
+
+	type FillItem = {
+		id : string
+		kind : string
+		title : string
+		paidTxt : string
+		unitTxt : string
+		socSpan : string
+		timeTxt : string
+		isOil : boolean
+		draft : boolean
+		amount : number
+		amountPresent : boolean
+		quantity : number
+		beforeVal : string
+		afterVal : string
+		noteText : string
+	}
+
+	const themeClass = ref(themeClassOf())
+	const padStyle = ref('')
+	const wrapStyle = ref('')
+	const fillModalRef = ref<any>(null)
+
+	// 看板资产数据
+	const totalPaid = ref('¥ 0.00')
+	const elecPaid = ref('¥ 0.00')
+	const oilPaid = ref('¥ 0.00')
+	const elecKwhTxt = ref('充入 0.0 kWh · 均价 —')
+	const oilLiterTxt = ref('加入 0.0 L · 均价 —')
+	const perHundred = ref('暂无里程数据，无法计算')
+	const elecRatio = ref('0%')
+	const oilRatio = ref('0%')
+	const allItems = ref<FillItem[]>([] as FillItem[])
+	const shownItems = ref<FillItem[]>([] as FillItem[])
+
+	// 日期筛选器
+	const periodIndex = ref(0)
+	const periodLabel = ref('📅 当月记录')
+	const periodListTitle = ref('当月 流水明细')
+
+	const pick = (obj, key) => {
+		if (obj == null) {
+			return null
+		}
+		return obj[key]
+	}
+
+	const pad2 = (n : number) : string => {
+		if (n < 10) {
+			return '0' + n.toString()
+		}
+		return n.toString()
+	}
+
+	const monthKey = (offset : number) : string => {
+		const date = new Date()
+		date.setDate(1)
+		date.setMonth(date.getMonth() + offset)
+		return date.getFullYear().toString() + '-' + pad2(date.getMonth() + 1)
+	}
+
+	const monthText = (key : string) : string => {
+		if (key.length < 7) {
+			return key
+		}
+		return key.substring(0, 4) + '年 ' + parseInt(key.substring(5, 7)) + '月'
+	}
+
+	const displayTime = (raw : string) : string => {
+		if (raw.length >= 16) {
+			return raw.substring(0, 16)
+		}
+		return raw
+	}
+
+	const goBack = () => {
+		uni.navigateBack({ delta: 1 })
+	}
+
+	const setPeriodLabel = () => {
+		if (periodIndex.value == 0) {
+			periodLabel.value = '📅 ' + monthText(monthKey(0))
+			periodListTitle.value = monthText(monthKey(0)) + ' 流水明细'
+		} else if (periodIndex.value == 1) {
+			periodLabel.value = '📅 ' + monthText(monthKey(-1))
+			periodListTitle.value = monthText(monthKey(-1)) + ' 流水明细'
+		} else {
+			const year = new Date().getFullYear().toString()
+			periodLabel.value = '📅 ' + year + ' 全年'
+			periodListTitle.value = year + '年 流水明细'
+		}
+	}
+
+	const switchDatePeriod = () => {
+		periodIndex.value = (periodIndex.value + 1) % 3
+		setPeriodLabel()
+		applyPeriodFilter()
+	}
+
+	const applyPeriodFilter = () => {
+		const key = periodIndex.value == 0 ? monthKey(0) : (periodIndex.value == 1 ? monthKey(-1) : new Date().getFullYear().toString())
+		const filtered : FillItem[] = []
+		let tot = 0.0
+		let eCost = 0.0
+		let oCost = 0.0
+		let eKwh = 0.0
+		let oLiter = 0.0
+		let ePaidKwh = 0.0
+		let oPaidLiter = 0.0
+		let eCostPriced = 0.0
+		let oCostPriced = 0.0
+
+		let i = 0
+		while (i < allItems.value.length) {
+			const item = allItems.value[i]
+			const dateKey = item.timeTxt.length >= 7 ? item.timeTxt.substring(0, 7) : ''
+			const match = periodIndex.value == 2 ? dateKey.startsWith(key) : dateKey == key
+			if (match) {
+				filtered.push(item)
+				if (item.amount > 0) {
+					tot = tot + item.amount
+					if (item.isOil) {
+						oCost = oCost + item.amount
+					} else {
+						eCost = eCost + item.amount
+					}
+				}
+				if (item.quantity > 0) {
+					if (item.isOil) {
+						oLiter = oLiter + item.quantity
+						if (item.amount > 0) {
+							oPaidLiter = oPaidLiter + item.quantity
+							oCostPriced = oCostPriced + item.amount
+						}
+					} else {
+						eKwh = eKwh + item.quantity
+						if (item.amount > 0) {
+							ePaidKwh = ePaidKwh + item.quantity
+							eCostPriced = eCostPriced + item.amount
+						}
+					}
+				}
+			}
+			i = i + 1
+		}
+
+		shownItems.value = filtered
+		totalPaid.value = '¥ ' + tot.toFixed(2)
+		const ePct = tot > 0 ? Math.round(eCost / tot * 100) : 0
+		const oPct = tot > 0 ? (100 - ePct) : 0
+		elecRatio.value = ePct.toString() + '%'
+		oilRatio.value = oPct.toString() + '%'
+		elecPaid.value = '⚡ 电费 ¥' + eCost.toFixed(2) + ' (' + ePct + '%)'
+		oilPaid.value = '⛽ 油费 ¥' + oCost.toFixed(2) + ' (' + oPct + '%)'
+
+		const avgKwh = ePaidKwh > 0 ? '¥' + (eCostPriced / ePaidKwh).toFixed(2) : '—'
+		const avgL = oPaidLiter > 0 ? '¥' + (oCostPriced / oPaidLiter).toFixed(2) : '—'
+		elecKwhTxt.value = '充入 ' + eKwh.toFixed(1) + ' kWh · 均价 ' + avgKwh + '/度'
+		oilLiterTxt.value = '加入 ' + oLiter.toFixed(1) + ' L · 均价 ' + avgL + '/升'
+	}
+
+	const load = async () => {
+		if (sessionOf() == '') {
+			return
+		}
+		const res = await ownerRequest('GET', '/api/v1/owner/energy', null)
+		if (envelopeOk(res) == false) {
+			bounceIfAuthFailed(res)
+			return
+		}
+		const data = envelopeData(res)
+		const rawFills = pick(data, 'fills')
+		const list : FillItem[] = []
+
+		if (rawFills != null) {
+			let i = 0
+			while (i < rawFills.length) {
+				const row = rawFills[i]
+				const k = pick(row, 'kind')
+				const isO = k == 'refuel'
+				const isDraft = pick(row, 'status') == 'draft'
+				const amountPresent = pick(row, 'paidCny') != null
+				const amtVal = amountPresent ? parseFloat('' + pick(row, 'paidCny')) : 0
+				const qtyVal = isO
+					? (pick(row, 'liters') == null ? 0 : parseFloat('' + pick(row, 'liters')))
+					: (pick(row, 'energyKwh') == null ? 0 : parseFloat('' + pick(row, 'energyKwh')))
+
+				let pTxt = pick(row, 'paidCny') != null ? '¥ ' + amtVal.toFixed(2) : '待补花费'
+				const unit = pick(row, 'unitCny')
+				let uTxt = unit != null ? '折合 ¥' + parseFloat('' + unit).toFixed(2) + (isO ? '/升' : '/度') : ''
+
+				const bNum = isO ? pick(row, 'fuelStart') : pick(row, 'socStart')
+				const aNum = isO ? pick(row, 'fuelEnd') : pick(row, 'socEnd')
+				const bTxt = bNum == null ? '' : '' + bNum
+				const aTxt = aNum == null ? '' : '' + aNum
+
+				let span = isO ? '油量 ' : '电量 '
+				span = span + (bTxt != '' ? bTxt + '%' : '—') + ' → ' + (aTxt != '' ? aTxt + '%' : '—')
+				if (qtyVal > 0) {
+					span = span + (isO ? ' (加入 ' + qtyVal.toFixed(1) + ' L)' : ' (充入 ' + qtyVal.toFixed(1) + ' kWh)')
+				}
+
+				let title = isO ? '加油记账' : '充电记账'
+				if (isDraft) {
+					title = isO ? '系统识别 · 加油' : '系统识别 · 充电'
+				} else if (pick(row, 'note') != null && ('' + pick(row, 'note')).trim() != '') {
+					title = '' + pick(row, 'note')
+				}
+
+				const fin = pick(row, 'finishedAt')
+				list.push({
+					id: '' + pick(row, 'id'),
+					kind: '' + k,
+					title: title,
+					paidTxt: pTxt,
+					unitTxt: uTxt,
+					socSpan: span,
+					timeTxt: fin == null ? '' : displayTime('' + fin),
+					isOil: isO,
+					draft: isDraft,
+					amount: amtVal,
+					amountPresent: amountPresent,
+					quantity: qtyVal,
+					beforeVal: bTxt,
+					afterVal: aTxt,
+					noteText: pick(row, 'note') == null ? '' : '' + pick(row, 'note')
+				})
+				i = i + 1
+			}
+		}
+		allItems.value = list
+		setPeriodLabel()
+		applyPeriodFilter()
+	}
+
+	// 调起弹窗组件记一笔
+	const openAdd = () => {
+		if (fillModalRef.value != null) {
+			fillModalRef.value.open('charge', false, null)
+		}
+	}
+
+	// 点击明细卡片调起弹窗组件修改
+	const clickItem = (item : FillItem) => {
+		if (fillModalRef.value != null) {
+			const payload : UTSJSONObject = {
+				id: item.id,
+				amount: item.amount,
+				amountPresent: item.amountPresent,
+				quantity: item.quantity,
+				beforeVal: item.beforeVal,
+				afterVal: item.afterVal,
+				noteText: item.noteText,
+				timeTxt: item.timeTxt
+			}
+			fillModalRef.value.open(item.isOil ? 'refuel' : 'charge', item.draft, payload)
+		}
+	}
+
+	onLoad(() => {
+		themeClass.value = themeClassOf()
+		padStyle.value = padBoxStyle(false)
+		wrapStyle.value = pageWrapStyle()
+		applyThemeChrome()
+	})
+
+	onShow(() => {
+		load()
+	})
+</script>
+
+<template>
+	<view class="page-wrap" :class="themeClass" :style="wrapStyle">
+		<scroll-view class="scroller" direction="vertical">
+			<view class="pad" :style="padStyle">
+				<!-- 顶部返回导航栏 -->
+				<view class="nav-bar">
+					<view class="back-btn" @click="goBack">
+						<text class="back-arrow">‹</text>
+						<text class="back-txt">返回</text>
+					</view>
+					<text class="page-title">全部补能记录</text>
+					<view class="nav-right"></view>
+				</view>
+
+				<!-- 📅 日期时间筛选器栏目 -->
+				<view class="filter-bar">
+					<view class="filter-left">
+						<view class="period-btn" @click="switchDatePeriod">
+							<text class="period-txt">{{ periodLabel }}</text>
+							<text class="period-arrow">▼</text>
+						</view>
+						<text class="filter-count">共 {{ shownItems.length }} 笔补能</text>
+					</view>
+					<!-- 顶部直接打开补能弹窗组件 (默认充电) -->
+					<view class="add-btn" @click="openAdd">
+						<text class="add-txt">+ 记一笔</text>
+					</view>
+				</view>
+
+				<!-- 📊【专业多维能耗资产看板】 -->
+				<view class="cockpit-card asset-board">
+					<view class="board-top">
+						<view class="board-left">
+							<text class="board-label">当期累计补能总支出</text>
+							<text class="board-big">{{ totalPaid }}</text>
+						</view>
+						<!-- 百公里综合能耗成本洞察标签 -->
+						<view class="board-insight">
+							<text class="insight-label">折合综合能耗</text>
+							<text class="insight-val">{{ perHundred }}</text>
+						</view>
+					</view>
+
+					<!-- 电/油双色拼接占比进度条 -->
+					<view class="board-ratio-box">
+						<view class="ratio-txt-row">
+							<text class="ratio-txt-elec">{{ elecPaid }}</text>
+							<text class="ratio-txt-oil">{{ oilPaid }}</text>
+						</view>
+						<view class="ratio-bar-track">
+							<view class="ratio-fill-elec" :style="'width:' + elecRatio"></view>
+							<view class="ratio-fill-oil" :style="'width:' + oilRatio"></view>
+						</view>
+						<view class="ratio-sub-row">
+							<text class="ratio-sub-txt">{{ elecKwhTxt }}</text>
+							<text class="ratio-sub-txt">{{ oilLiterTxt }}</text>
+						</view>
+					</view>
+				</view>
+
+				<!-- 流水列表明细 -->
+				<view class="list-section">
+					<text class="list-sec-title">{{ periodListTitle }}</text>
+
+					<view class="items-wrap">
+						<view class="item-card" v-for="item in shownItems" :key="item.id" @click="clickItem(item)">
+							<view class="item-top">
+								<view class="item-title-box">
+									<view class="item-icon-box" :class="item.isOil ? 'icon-oil' : 'icon-elec'">
+										<text class="item-emoji">{{ item.isOil ? '⛽' : '⚡' }}</text>
+									</view>
+									<text class="item-title">{{ item.title }}</text>
+									<text class="draft-tag" v-if="item.draft">待补账单</text>
+								</view>
+								<text class="item-paid" :class="item.draft ? 'amt-draft' : (item.isOil ? 'amt-oil' : 'amt-elec')">{{ item.paidTxt }}</text>
+							</view>
+
+							<view class="item-mid">
+								<text class="item-span">{{ item.socSpan }}</text>
+								<text class="item-unit" v-if="item.unitTxt.length > 0">{{ item.unitTxt }}</text>
+							</view>
+
+							<view class="item-bot">
+								<text class="item-time">{{ item.timeTxt }}</text>
+								<text class="item-action">{{ item.draft ? '补充账单 ›' : '已入账 ›' }}</text>
+							</view>
+						</view>
+
+						<view class="empty-box" v-if="shownItems.length == 0">
+							<text class="empty-txt">当期暂无补能记录，点击右上角 + 记一笔</text>
+						</view>
+					</view>
+				</view>
+
+				<view class="page-end"></view>
+			</view>
+		</scroll-view>
+
+		<!-- 独立补能记账弹窗组件 -->
+		<FillModal ref="fillModalRef" @success="load" />
+	</view>
+</template>
+
+<style scoped>
+	.page-wrap {
+		width: 100%;
+		height: 100%;
+		flex-direction: column;
+	}
+	.scroller {
+		flex: 1;
+		width: 100%;
+	}
+	.pad {
+		padding: 16px;
+	}
+	.page-end {
+		height: 40px;
+	}
+
+	.nav-bar {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-bottom: 12px;
+		border-bottom: 1px solid var(--border-sub, rgba(15, 23, 42, 0.06));
+		margin-bottom: 12px;
+	}
+	.back-btn {
+		flex-direction: row;
+		align-items: center;
+		padding: 4px 6px;
+	}
+	.back-arrow {
+		font-size: 20px;
+		color: #FF5722;
+		font-weight: 700;
+		margin-right: 4px;
+	}
+	.back-txt {
+		font-size: 14px;
+		color: #FF5722;
+		font-weight: 600;
+	}
+	.page-title {
+		font-size: 15px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.nav-right {
+		width: 48px;
+	}
+
+	/* 筛选行 */
+	.filter-bar {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+	.filter-left {
+		flex-direction: row;
+		align-items: center;
+	}
+	.period-btn {
+		flex-direction: row;
+		align-items: center;
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 12px;
+		padding: 5px 10px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+	}
+	.period-txt {
+		font-size: 12px;
+		font-weight: 700;
+		color: #FF5722;
+		margin-right: 4px;
+	}
+	.period-arrow {
+		font-size: 10px;
+		color: #FF5722;
+	}
+	.filter-count {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+		margin-left: 8px;
+	}
+	.add-btn {
+		padding: 4px 8px;
+	}
+	.add-txt {
+		font-size: 13px;
+		font-weight: 700;
+		color: #FF5722;
+	}
+
+	/* 看板卡片 */
+	.cockpit-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 18px;
+		padding: 16px;
+		margin-bottom: 14px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+	}
+	.board-top {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: 12px;
+	}
+	.board-left {
+		flex-direction: column;
+	}
+	.board-label {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.board-big {
+		font-size: 28px;
+		font-weight: 800;
+		color: var(--text-main, #0F172A);
+		margin-top: 2px;
+		letter-spacing: -0.5px;
+	}
+	.board-insight {
+		background-color: var(--card-sub-bg, rgba(15, 23, 42, 0.03));
+		border-radius: 10px;
+		padding: 6px 10px;
+		align-items: flex-end;
+	}
+	.insight-label {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.insight-val {
+		font-size: 12px;
+		font-weight: 700;
+		color: #059669;
+		margin-top: 2px;
+	}
+
+	.board-ratio-box {
+		padding-top: 10px;
+		border-top: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
+	}
+	.ratio-txt-row {
+		flex-direction: row;
+		justify-content: space-between;
+		margin-bottom: 6px;
+	}
+	.ratio-txt-elec {
+		font-size: 11px;
+		font-weight: 600;
+		color: #059669;
+	}
+	.ratio-txt-oil {
+		font-size: 11px;
+		font-weight: 600;
+		color: #D97706;
+	}
+	.ratio-bar-track {
+		height: 8px;
+		border-radius: 4px;
+		background-color: rgba(15, 23, 42, 0.08);
+		overflow: hidden;
+		flex-direction: row;
+		margin-bottom: 6px;
+	}
+	.ratio-fill-elec {
+		height: 8px;
+		background-color: #10B981;
+	}
+	.ratio-fill-oil {
+		height: 8px;
+		background-color: #F59E0B;
+	}
+	.ratio-sub-row {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+	.ratio-sub-txt {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	/* 流水明细列表 */
+	.list-section {
+		margin-top: 4px;
+	}
+	.list-sec-title {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--text-sub, #64748B);
+		margin-bottom: 8px;
+		padding-left: 2px;
+	}
+	.items-wrap {
+		flex-direction: column;
+		gap: 10px;
+	}
+	.item-card {
+		background-color: var(--card-bg, #FFFFFF);
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+		border-radius: 16px;
+		padding: 12px 14px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+	}
+	.item-top {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 6px;
+	}
+	.item-title-box {
+		flex-direction: row;
+		align-items: center;
+	}
+	.item-icon-box {
+		width: 24px;
+		height: 24px;
+		border-radius: 8px;
+		justify-content: center;
+		align-items: center;
+		margin-right: 8px;
+	}
+	.icon-elec {
+		background-color: rgba(16, 185, 129, 0.12);
+	}
+	.icon-oil {
+		background-color: rgba(245, 158, 11, 0.12);
+	}
+	.item-emoji {
+		font-size: 12px;
+	}
+	.item-title {
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--text-main, #0F172A);
+	}
+	.draft-tag {
+		font-size: 10px;
+		color: #FF5722;
+		background-color: rgba(255, 87, 34, 0.1);
+		padding: 2px 6px;
+		border-radius: 6px;
+		margin-left: 6px;
+	}
+	.item-paid {
+		font-size: 14px;
+		font-weight: 800;
+	}
+	.amt-elec {
+		color: #059669;
+	}
+	.amt-oil {
+		color: #D97706;
+	}
+	.amt-draft {
+		color: #FF5722;
+	}
+
+	.item-mid {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 6px;
+	}
+	.item-span {
+		font-size: 11px;
+		color: var(--text-sub, #64748B);
+	}
+	.item-unit {
+		font-size: 11px;
+		color: var(--text-muted, #94A3B8);
+	}
+
+	.item-bot {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding-top: 6px;
+		border-top: 1px solid var(--border-sub, rgba(15, 23, 42, 0.05));
+	}
+	.item-time {
+		font-size: 10px;
+		color: var(--text-muted, #94A3B8);
+	}
+	.item-action {
+		font-size: 11px;
+		font-weight: 600;
+		color: #FF5722;
+	}
+
+	.empty-box {
+		padding: 30px 0;
+		align-items: center;
+	}
+	.empty-txt {
+		font-size: 12px;
+		color: var(--text-muted, #94A3B8);
+	}
+</style>

@@ -65,12 +65,18 @@
       "style": {
         "navigationBarTitleText": "充电 / 加油"
       }
+    },
+    {
+      "path": "pages/fills/all",
+      "style": {
+        "navigationBarTitleText": "全部补能记录"
+      }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "风火轮",
-    "navigationBarBackgroundColor": "#EEF2F6",
+    "navigationBarBackgroundColor": "#F0F4F8",
     "backgroundColor": "@bgColor",
     "backgroundColorContent": "@bgColorContent"
   },
@@ -89,22 +95,10 @@
         "selectedIconPath": "static/tab/now-active.png"
       },
       {
-        "pagePath": "pages/ctrl/ctrl",
-        "text": "车控",
-        "iconPath": "static/tab/ctrl.png",
-        "selectedIconPath": "static/tab/ctrl-active.png"
-      },
-      {
         "pagePath": "pages/energy/energy",
         "text": "能耗",
         "iconPath": "static/tab/energy.png",
         "selectedIconPath": "static/tab/energy-active.png"
-      },
-      {
-        "pagePath": "pages/battery/battery",
-        "text": "电池",
-        "iconPath": "static/tab/battery.png",
-        "selectedIconPath": "static/tab/battery-active.png"
       },
       {
         "pagePath": "pages/more/more",

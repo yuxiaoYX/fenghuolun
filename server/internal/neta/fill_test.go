@@ -23,6 +23,15 @@ func TestDetectFillsChargeNeedsPlug(t *testing.T) {
 	}
 }
 
+func TestDetectFillsDoesNotBridgeSnapshotGap(t *testing.T) {
+	yes := true
+	a := Snapshot{FetchedAt: clock.Of(time.Unix(1, 0).UTC()), Power: Power{SocPct: ptr(20), PluggedIn: &yes}}
+	b := Snapshot{FetchedAt: clock.Of(time.Unix(1, 0).UTC().Add(2 * time.Hour)), Power: Power{SocPct: ptr(80), PluggedIn: &yes}}
+	if got := DetectFills([]Snapshot{a, b}); len(got) != 0 {
+		t.Fatalf("snapshot gap must not become a fill: %+v", got)
+	}
+}
+
 func TestDetectFillsMergeChargeAndRefuel(t *testing.T) {
 	yes := true
 	s := []Snapshot{

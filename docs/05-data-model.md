@@ -163,7 +163,7 @@
 |---|---|
 | `binding` | 车辆绑定；VIN/refresh/access 密文列，对外只给脱敏与有/无 |
 | `owner_session` | 车主会话，只存 token 哈希 |
-| `snapshot` | 解码后快照 JSON，按车追加 |
+| `snapshot` | 解码后快照 JSON，按车追加；默认每 15 分钟采集，`snapshot_keep=0` 表示不裁剪历史 |
 | `energy` | 官方能耗，一车一行覆盖 |
 | `sync_job` | 同步历史，主键 `id`，不是 `binding_id` |
 | `admin_user` / `admin_session` | 管理员；会话带 username |

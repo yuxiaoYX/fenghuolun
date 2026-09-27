@@ -28,9 +28,9 @@
 
 ## HAR 与抓包
 
-- 根 `.gitignore` 已忽略 `*.har`
-- `1.har` 含手机号、VIN、坐标、token、验证码、设备 id、数字钥匙、MQTT。**不得**复制进 `docs/`、`testdata/`、Issue、聊天归档
-- 分析结论写在本机 `HAR-ANALYSIS.md`（不进仓库）和 `09-protocol-neta.md`，只留结构与非个人示例值
+- 根 `.gitignore` 已忽略 `*.har` 和 `docs/HAR-ANALYSIS.md`
+- `1.har` 含手机号、VIN、坐标、token、验证码、设备 id、数字钥匙、MQTT。IPA 含生产/UAT `APP_SECRET`。**不得**复制进仓库内 `docs/`、`testdata/`、Issue、聊天归档
+- 分析结论：结构与路径写在 `09-protocol-neta.md`；密钥簇与反汇编只留本机 `HAR-ANALYSIS.md`
 - 若该 HAR 曾离开本机，视为会话可能泄露，应在官方侧失效 token（由车主在官方 App 处理），本仓库不负责任意传播
 
 ## 开源发布检查单
